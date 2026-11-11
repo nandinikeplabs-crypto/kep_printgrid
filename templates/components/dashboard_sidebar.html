@@ -1,0 +1,73 @@
+<div class="sidebar p-3 d-flex flex-column">
+    <div class="mb-4 px-2">
+        <h6 class="text-uppercase text-muted fw-bold mb-1" style="font-size: 0.75rem;">Shop Workspace</h6>
+        <div class="fw-bold text-white text-truncate">{{ shop.name }}</div>
+        <div class="d-flex align-items-center gap-2 mt-2">
+            {% if shop.is_accepting_orders %}
+                <span class="badge bg-success" style="font-size: 0.7rem;"><i class="bi bi-broadcast me-1"></i> Orders Active</span>
+            {% else %}
+                <span class="badge bg-warning text-dark" style="font-size: 0.7rem;"><i class="bi bi-pause-circle me-1"></i> Paused</span>
+            {% endif %}
+            {% if shop.connector_last_seen %}
+                <span class="badge bg-info text-dark" style="font-size: 0.7rem;"><i class="bi bi-link-45deg me-1"></i> Connector Live</span>
+            {% else %}
+                <span class="badge bg-secondary" style="font-size: 0.7rem;"><i class="bi bi-slash-circle me-1"></i> Connector Idle</span>
+            {% endif %}
+        </div>
+    </div>
+
+    <ul class="nav flex-column mb-auto">
+        <li class="nav-item">
+            <a class="nav-link {% if request.resolver_match.url_name == 'owner_overview' %}active{% endif %}" href="{% url 'core:owner_overview' %}">
+                <i class="bi bi-speedometer2"></i> Overview
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link {% if request.resolver_match.url_name == 'order_list' or request.resolver_match.url_name == 'order_detail' %}active{% endif %}" href="{% url 'orders:order_list' %}">
+                <i class="bi bi-receipt"></i> Orders
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link {% if request.resolver_match.url_name == 'printer_list' %}active{% endif %}" href="{% url 'printers:printer_list' %}">
+                <i class="bi bi-printer"></i> Printers
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link {% if request.resolver_match.url_name == 'printer_assignments' %}active{% endif %}" href="{% url 'printers:printer_assignments' %}">
+                <i class="bi bi-diagram-3"></i> Intelligent Routing
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link {% if request.resolver_match.url_name == 'shop_qr_management' %}active{% endif %}" href="{% url 'core:shop_qr_management' %}">
+                <i class="bi bi-qr-code"></i> Permanent QR Code
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link {% if request.resolver_match.url_name == 'pricing_settings' %}active{% endif %}" href="{% url 'orders:pricing_settings' %}">
+                <i class="bi bi-tags"></i> Pricing Settings
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link {% if request.resolver_match.url_name == 'reports' %}active{% endif %}" href="{% url 'core:reports' %}">
+                <i class="bi bi-graph-up"></i> Reports &amp; Sales
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link {% if request.resolver_match.url_name == 'staff_management' %}active{% endif %}" href="{% url 'core:staff_management' %}">
+                <i class="bi bi-people"></i> Staff Management
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link {% if request.resolver_match.url_name == 'shop_settings' %}active{% endif %}" href="{% url 'core:shop_settings' %}">
+                <i class="bi bi-gear"></i> Shop Settings
+            </a>
+        </li>
+    </ul>
+
+    <hr class="text-secondary">
+    <div class="px-2">
+        <a href="{% url 'shop_order_page' slug=shop.slug %}" target="_blank" class="btn btn-outline-info btn-sm w-100 mb-2">
+            <i class="bi bi-box-arrow-up-right me-1"></i> Customer Order View
+        </a>
+    </div>
+</div>

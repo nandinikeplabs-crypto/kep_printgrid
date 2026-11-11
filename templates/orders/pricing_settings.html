@@ -1,0 +1,67 @@
+{% extends 'base.html' %}
+
+{% block title %}Pricing Settings - {{ shop.name }}{% endblock %}
+
+{% block content %}
+<div class="dashboard-container">
+    {% include 'components/dashboard_sidebar.html' %}
+
+    <div class="dashboard-main">
+        <h4 class="fw-bold mb-1">Printing Rates Configuration</h4>
+        <div class="text-muted small mb-4">Set per-page and per-sheet rates in INR. Prices are dynamically quoted to customers before checkout.</div>
+
+        <div class="row">
+            <div class="col-lg-8">
+                <div class="card border-0 shadow-sm rounded-4 p-4 bg-white">
+                    <form method="post">
+                        {% csrf_token %}
+
+                        <h6 class="fw-bold text-dark mb-3"><i class="bi bi-file-earmark-text text-primary me-2"></i>A4 Standard Document Printing (per sheet / page)</h6>
+                        <div class="row g-3 mb-4">
+                            <div class="col-md-6">
+                                <label class="form-label small fw-semibold text-muted">B&amp;W Single-Sided (₹ / page)</label>
+                                {{ form.bw_single_rate }}
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small fw-semibold text-muted">B&amp;W Double-Sided (₹ / sheet)</label>
+                                {{ form.bw_double_rate }}
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small fw-semibold text-muted">Colour Single-Sided (₹ / page)</label>
+                                {{ form.color_single_rate }}
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small fw-semibold text-muted">Colour Double-Sided (₹ / sheet)</label>
+                                {{ form.color_double_rate }}
+                            </div>
+                        </div>
+
+                        <h6 class="fw-bold text-dark mb-3"><i class="bi bi-file-earmark-ruled text-info me-2"></i>A3 Large Format Rates (per page)</h6>
+                        <div class="row g-3 mb-4">
+                            <div class="col-md-6">
+                                <label class="form-label small fw-semibold text-muted">A3 Black &amp; White (₹ / page)</label>
+                                {{ form.a3_bw_rate }}
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small fw-semibold text-muted">A3 Colour (₹ / page)</label>
+                                {{ form.a3_color_rate }}
+                            </div>
+                        </div>
+
+                        <div class="form-check mb-4">
+                            {{ form.is_active }}
+                            <label class="form-check-label fw-bold small text-dark" for="{{ form.is_active.id_for_label }}">
+                                Enable these rates for live customer orders
+                            </label>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary px-4 fw-semibold">
+                            Update Rates
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

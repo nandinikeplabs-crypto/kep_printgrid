@@ -1,0 +1,123 @@
+{% extends 'base.html' %}
+
+{% block title %}Staff Management - {{ shop.name }}{% endblock %}
+
+{% block content %}
+<div class="dashboard-container">
+    {% include 'components/dashboard_sidebar.html' %}
+
+    <div class="dashboard-main">
+        <h4 class="fw-bold mb-1">Staff Management</h4>
+        <div class="text-muted small mb-4">Grant counter staff operational access without exposing owner-level credentials.</div>
+
+        <div class="row g-4">
+            <!-- Add Staff Form -->
+            <div class="col-lg-5">
+                <div class="card border-0 shadow-sm rounded-4 p-4 bg-white">
+                    <h6 class="fw-bold mb-3"><i class="bi bi-person-plus text-primary me-2"></i>Add New Operator</h6>
+                    <form method="post">
+                        {% csrf_token %}
+
+                        {% if form.errors %}
+                            <div class="alert alert-danger py-2 small">
+                                {% for field, errors in form.errors.items %}
+                                    <div>{{ errors.0 }}</div>
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+
+                        <div class="mb-3">
+                            <label class="form-label small fw-semibold text-muted">Staff Name</label>
+                            {{ form.name }}
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label small fw-semibold text-muted">Email Address</label>
+                            {{ form.email }}
+                        </div>
+                        <div class="row g-2 mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label small fw-semibold text-muted">Mobile</label>
+                                {{ form.mobile_number }}
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small fw-semibold text-muted">Password</label>
+                                {{ form.password }}
+                            </div>
+                        </div>
+
+                        <div class="border rounded-3 p-3 mb-3 bg-light">
+                            <div class="fw-bold small mb-2 text-dark">Staff Permissions</div>
+                            <div class="form-check mb-2">
+                                {{ form.can_authorize_retries }}
+                                <label class="form-check-label small" for="{{ form.can_authorize_retries.id_for_label }}">
+                                    Can authorize job retries on printer error
+                                </label>
+                            </div>
+                            <div class="form-check mb-2">
+                                {{ form.can_manage_printers }}
+                                <label class="form-check-label small" for="{{ form.can_manage_printers.id_for_label }}">
+                                    Can toggle printer availability
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                {{ form.can_manage_pricing }}
+                                <label class="form-check-label small" for="{{ form.can_manage_pricing.id_for_label }}">
+                                    Can update pricing rules
+                                </label>
+                            </div>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary w-100 fw-semibold">
+                            Create Staff Account
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Active Staff Table -->
+            <div class="col-lg-7">
+                <div class="card border-0 shadow-sm rounded-4 bg-white overflow-hidden">
+                    <div class="card-header bg-white py-3 border-0">
+                        <h6 class="fw-bold mb-0"><i class="bi bi-people text-primary me-2"></i>Active Staff Accounts</h6>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="table-light small text-uppercase text-muted">
+                                <tr>
+                                    <th>Operator</th>
+                                    <th>Permissions</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for staff in staff_members %}
+                                    <tr>
+                                        <td>
+                                            <div class="fw-bold">{{ staff.user.get_full_name|default:staff.user.username }}</div>
+                                            <div class="text-muted small">{{ staff.user.email }}</div>
+                                        </td>
+                                        <td>
+                                            {% if staff.can_authorize_retries %}<span class="badge bg-light text-dark border">Retry Authorized</span>{% endif %}
+                                            {% if staff.can_manage_printers %}<span class="badge bg-light text-dark border">Printers</span>{% endif %}
+                                            {% if staff.can_manage_pricing %}<span class="badge bg-light text-dark border">Pricing</span>{% endif %}
+                                        </td>
+                                        <td>
+                                            <a href="{% url 'core:remove_staff' staff_id=staff.id %}" class="btn btn-outline-danger btn-sm py-0 px-2" onclick="return confirm('Remove this staff account?');">
+                                                Remove
+                                            </a>
+                                        </td>
+                                    </tr>
+                                {% empty %}
+                                    <tr>
+                                        <td colspan="3" class="text-center py-4 text-muted small">No staff accounts registered yet.</td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

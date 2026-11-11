@@ -1,0 +1,212 @@
+/* KEP PrintGrid Custom Stylesheet */
+:root {
+    --pg-navy: #0F172A;
+    --pg-navy-light: #1E293B;
+    --pg-blue: #2563EB;
+    --pg-blue-hover: #1D4ED8;
+    --pg-cyan: #06B6D4;
+    --pg-bg: #F8FAFC;
+    --pg-card-bg: #FFFFFF;
+    --pg-border: #E2E8F0;
+    --pg-text: #0F172A;
+    --pg-muted: #64748B;
+}
+
+body {
+    background-color: var(--pg-bg);
+    color: var(--pg-text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.main-content {
+    flex: 1;
+}
+
+/* Navbar */
+.navbar-brand {
+    font-weight: 700;
+    letter-spacing: -0.5px;
+    font-size: 1.25rem;
+}
+
+.badge-brand {
+    background-color: #38BDF8;
+    color: #0F172A;
+    font-size: 0.7rem;
+    font-weight: 700;
+    vertical-align: middle;
+}
+
+/* Sidebar Dashboard Layout */
+.dashboard-container {
+    display: flex;
+    min-height: calc(100vh - 60px);
+}
+
+.sidebar {
+    width: 260px;
+    background-color: var(--pg-navy);
+    color: #F8FAFC;
+    flex-shrink: 0;
+}
+
+.sidebar .nav-link {
+    color: #94A3B8;
+    font-weight: 500;
+    padding: 0.75rem 1.25rem;
+    border-radius: 8px;
+    margin: 0.2rem 0.6rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    transition: all 0.2s ease-in-out;
+}
+
+.sidebar .nav-link:hover, .sidebar .nav-link.active {
+    color: #FFFFFF;
+    background-color: var(--pg-navy-light);
+}
+
+.sidebar .nav-link.active {
+    border-left: 4px solid var(--pg-cyan);
+}
+
+.dashboard-main {
+    flex: 1;
+    padding: 2rem;
+    background-color: var(--pg-bg);
+    overflow-y: auto;
+}
+
+/* Metric Cards */
+.metric-card {
+    background-color: var(--pg-card-bg);
+    border: 1px solid var(--pg-border);
+    border-radius: 12px;
+    padding: 1.5rem;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.metric-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+.metric-value {
+    font-size: 1.85rem;
+    font-weight: 700;
+    color: var(--pg-navy);
+}
+
+.metric-label {
+    font-size: 0.875rem;
+    color: var(--pg-muted);
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Status Badges */
+.badge-status-completed {
+    background-color: #DCFCE7;
+    color: #166534;
+}
+
+.badge-status-printing {
+    background-color: #DBEAFE;
+    color: #1E40AF;
+}
+
+.badge-status-queued {
+    background-color: #FEF3C7;
+    color: #92400E;
+}
+
+.badge-status-failed {
+    background-color: #FEE2E2;
+    color: #991B1B;
+}
+
+/* Dropzone for Uploads */
+.upload-dropzone {
+    border: 2px dashed #94A3B8;
+    background-color: #F8FAFC;
+    border-radius: 16px;
+    padding: 3rem 1.5rem;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.upload-dropzone:hover, .upload-dropzone.dragover {
+    border-color: var(--pg-blue);
+    background-color: #EFF6FF;
+}
+
+/* Stepper for Customer Flow */
+.stepper-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 2rem;
+    position: relative;
+}
+
+.step-node {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    z-index: 2;
+}
+
+.step-num {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background-color: #E2E8F0;
+    color: var(--pg-muted);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+}
+
+.step-node.active .step-num {
+    background-color: var(--pg-blue);
+    color: #FFFFFF;
+}
+
+.step-node.done .step-num {
+    background-color: #10B981;
+    color: #FFFFFF;
+}
+
+.step-title {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--pg-muted);
+}
+
+.step-node.active .step-title {
+    color: var(--pg-navy);
+}
+
+/* Canvas Preview Container */
+.pdf-preview-box {
+    max-height: 400px;
+    overflow-y: auto;
+    background-color: #475569;
+    border-radius: 8px;
+    padding: 1rem;
+    text-align: center;
+}
+
+.pdf-preview-canvas {
+    max-width: 100%;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+    margin-bottom: 1rem;
+}

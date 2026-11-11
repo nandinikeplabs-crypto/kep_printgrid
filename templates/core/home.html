@@ -1,0 +1,73 @@
+{% extends 'base.html' %}
+
+{% block title %}KEP PrintGrid - Smart QR-Based Xerox & Print Automation{% endblock %}
+
+{% block content %}
+<div class="bg-dark text-white py-5 border-bottom border-secondary">
+    <div class="container py-4">
+        <div class="row align-items-center g-5">
+            <div class="col-lg-7">
+                <span class="badge bg-primary px-3 py-2 text-uppercase mb-3">Zero-Knowledge Secure Printing</span>
+                <h1 class="display-4 fw-bold mb-3">Scan. Upload. Pay. Print Instantly.</h1>
+                <p class="lead text-light mb-4">
+                    KEP PrintGrid eliminates long queues and thumb drives at Xerox shops. Customers scan a permanent shop QR code, configure printing options on mobile, pay securely, and collect printed documents at the counter.
+                </p>
+                <div class="d-flex flex-wrap gap-3">
+                    <a href="{% url 'core:register' %}" class="btn btn-primary btn-lg px-4 fw-semibold">
+                        <i class="bi bi-shop me-2"></i> Register Your Shop Free
+                    </a>
+                    <a href="{% url 'core:login' %}" class="btn btn-outline-light btn-lg px-4">
+                        Owner Login
+                    </a>
+                </div>
+            </div>
+            <div class="col-lg-5">
+                <div class="card border-0 shadow-lg text-dark p-4 bg-white rounded-4">
+                    <h5 class="fw-bold mb-3"><i class="bi bi-search text-primary me-2"></i> Track Your Print Order</h5>
+                    <p class="text-muted small">Enter your unique PrintGrid order number to view real-time printing progress.</p>
+                    <form onsubmit="event.preventDefault(); const val=document.getElementById('trackOrderInput').value.trim(); if(val) window.location.href='/orders/track/' + encodeURIComponent(val);">
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold text-muted">Order Number</label>
+                            <input type="text" id="trackOrderInput" class="form-control form-control-lg" placeholder="e.g. ORD-20261111-9284" required>
+                        </div>
+                        <button type="submit" class="btn btn-dark w-100 py-2 fw-semibold">
+                            <i class="bi bi-clock-history me-1"></i> Track Order Status
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="container py-5">
+    <div class="text-center mb-5">
+        <h2 class="fw-bold text-dark">Why Xerox Shops &amp; Customers Love PrintGrid</h2>
+        <p class="text-muted">Built from the ground up for security, speed, and hardware resilience.</p>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-md-4">
+            <div class="card h-100 border p-4 rounded-4 shadow-sm">
+                <div class="display-6 text-primary mb-3"><i class="bi bi-qr-code"></i></div>
+                <h5 class="fw-bold">1. Permanent QR Code</h5>
+                <p class="text-muted small">One shop QR code that never expires. Add, replace, or reassign printers without ever needing to print a new QR stand.</p>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card h-100 border p-4 rounded-4 shadow-sm">
+                <div class="display-6 text-success mb-3"><i class="bi bi-shield-lock-fill"></i></div>
+                <h5 class="fw-bold">2. Zero-Knowledge Encryption</h5>
+                <p class="text-muted small">Documents are encrypted in the customer's browser using AES-256-GCM and unwrapped only by the local shop connector. The cloud backend never sees plaintext files.</p>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card h-100 border p-4 rounded-4 shadow-sm">
+                <div class="display-6 text-info mb-3"><i class="bi bi-diagram-3-fill"></i></div>
+                <h5 class="fw-bold">3. Intelligent Spooler Routing</h5>
+                <p class="text-muted small">Automatically dispatches B&amp;W jobs to fast monochrome printers and color jobs to photo-capable copiers with automated failover.</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

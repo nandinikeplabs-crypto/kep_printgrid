@@ -1,0 +1,135 @@
+{% extends 'base.html' %}
+
+{% block title %}Track Order #{{ order.order_number }} | KEP PrintGrid{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <div class="card border-0 shadow-sm rounded-4 p-4 p-md-5 bg-white mb-4">
+                <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+                    <div>
+                        <span class="badge bg-secondary-subtle text-secondary px-3 py-1 mb-1 text-uppercase" style="font-size:0.7rem;">Order Tracking</span>
+                        <h3 class="fw-bold mb-0 text-dark">{{ order.order_number }}</h3>
+                    </div>
+                    <div>
+                        <span class="badge badge-status-{{ order.status|lower }} fs-6 px-3 py-2" id="liveStatusBadge">
+                            {{ order.get_status_display }}
+                        </span>
+                    </div>
+                </div>
+
+                <!-- Visual Stepper Progress Bar -->
+                <div class="stepper-header my-4">
+                    <div class="step-node {% if order.status in 'UPLOADED,AWAITING_PAYMENT,PAYMENT_VERIFIED,QUEUED,ASSIGNED,SENT_TO_PRINTER,PRINTING,COMPLETED' %}done{% endif %}">
+                        <div class="step-num"><i class="bi bi-check"></i></div>
+                        <div class="step-title">Uploaded</div>
+                    </div>
+                    <div class="step-node {% if order.status in 'PAYMENT_VERIFIED,QUEUED,ASSIGNED,SENT_TO_PRINTER,PRINTING,COMPLETED' %}done{% elif order.status == 'AWAITING_PAYMENT' %}active{% endif %}">
+                        <div class="step-num">2</div>
+                        <div class="step-title">Paid</div>
+                    </div>
+                    <div class="step-node {% if order.status in 'ASSIGNED,SENT_TO_PRINTER,PRINTING,COMPLETED' %}done{% elif order.status == 'QUEUED' %}active{% endif %}">
+                        <div class="step-num">3</div>
+                        <div class="step-title">Queued</div>
+                    </div>
+                    <div class="step-node {% if order.status in 'SENT_TO_PRINTER,PRINTING,COMPLETED' %}done{% elif order.status == 'ASSIGNED' %}active{% endif %}">
+                        <div class="step-num">4</div>
+                        <div class="step-title">Printing</div>
+                    </div>
+                    <div class="step-node {% if order.status == 'COMPLETED' %}done{% endif %}">
+                        <div class="step-num">5</div>
+                        <div class="step-title">Ready!</div>
+                    </div>
+                </div>
+
+                <!-- Status Detail Banner -->
+                <div class="alert {% if order.status == 'COMPLETED' %}alert-success{% elif order.status == 'FAILED' %}alert-danger{% else %}alert-info{% endif %} rounded-3 p-3 my-3">
+                    <div class="d-flex align-items-center gap-2">
+                        {% if order.status == 'COMPLETED' %}
+                            <i class="bi bi-check-circle-fill text-success fs-4"></i>
+                            <div>
+                                <strong>Your document has been printed successfully!</strong>
+                                <div class="small">Please collect your printout from the shop counter by presenting your order number.</div>
+                            </div>
+                        {% elif order.status == 'FAILED' %}
+                            <i class="bi bi-exclamation-triangle-fill text-danger fs-4"></i>
+                            <div>
+                                <strong>Printing exception occurred.</strong>
+                                <div class="small">{{ job.failure_reason|default:"The shop staff has been notified to assist you." }}</div>
+                            </div>
+                        {% else %}
+                            <span class="spinner-border spinner-border-sm text-primary" role="status"></span>
+                            <div>
+                                <strong>Processing your print job...</strong>
+                                <div class="small">
+                                    {% if job and job.printer %}
+                                        Routed to shop copier: <strong>{{ job.printer.name }}</strong>
+                                    {% else %}
+                                        Job is securely queued for next available copier.
+                                    {% endif %}
+                                </div>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Order Details Card -->
+                <div class="card bg-light border-0 rounded-4 p-4 mt-4">
+                    <h6 class="fw-bold mb-3 text-dark">Order Specification</h6>
+                    <div class="row g-3">
+                        <div class="col-sm-6">
+                            <div class="text-muted small">Shop Destination</div>
+                            <div class="fw-bold text-dark">{{ order.shop.name }}</div>
+                            <div class="text-muted small">{{ order.shop.address }}</div>
+                        </div>
+                        <div class="col-sm-6">
+                            <div class="text-muted small">Customer Name &amp; Phone</div>
+                            <div class="fw-bold text-dark">{{ order.customer_name }}</div>
+                            <div class="text-muted small">{{ order.customer_phone }}</div>
+                        </div>
+                        <div class="col-sm-6">
+                            <div class="text-muted small">Printing Preferences</div>
+                            <div class="fw-semibold text-dark">
+                                {{ order.preference.color_mode }} • {{ order.preference.duplex_mode }} • {{ order.preference.paper_size }} ({{ order.preference.copies }} copies)
+                            </div>
+                        </div>
+                        <div class="col-sm-6">
+                            <div class="text-muted small">Total Paid Amount</div>
+                            <div class="fw-bold fs-5 text-success">₹ {{ order.total_amount }}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    // Poll for status updates every 3 seconds if not completed or failed
+    const orderNumber = "{{ order.order_number }}";
+    let isFinished = {% if order.status in 'COMPLETED,FAILED,CANCELLED,REFUNDED' %}true{% else %}false{% endif %};
+
+    if (!isFinished) {
+        const intervalId = setInterval(async () => {
+            try {
+                const resp = await fetch(`/orders/api/status/${orderNumber}/`);
+                if (resp.ok) {
+                    const data = await resp.json();
+                    if (data.status !== "{{ order.status }}") {
+                        // Refresh page to render updated stage
+                        window.location.reload();
+                    }
+                    if (data.is_completed) {
+                        clearInterval(intervalId);
+                    }
+                }
+            } catch (e) {
+                console.error("Polling error:", e);
+            }
+        }, 3000);
+    }
+</script>
+{% endblock %}

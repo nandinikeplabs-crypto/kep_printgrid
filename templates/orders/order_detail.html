@@ -1,0 +1,170 @@
+{% extends 'base.html' %}
+
+{% block title %}Order {{ order.order_number }} - {{ shop.name }}{% endblock %}
+
+{% block content %}
+<div class="dashboard-container">
+    {% include 'components/dashboard_sidebar.html' %}
+
+    <div class="dashboard-main">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <a href="{% url 'orders:order_list' %}" class="small text-decoration-none text-muted">&larr; Back to Orders</a>
+                <h4 class="fw-bold mb-0 mt-1">Order {{ order.order_number }}</h4>
+            </div>
+            <div class="d-flex gap-2">
+                {% if order.status != 'COMPLETED' and order.status != 'REFUNDED' and order.status != 'CANCELLED' %}
+                    <a href="{% url 'orders:mark_completed' order_number=order.order_number %}" class="btn btn-success btn-sm">
+                        <i class="bi bi-check-circle me-1"></i> Mark Completed &amp; Collected
+                    </a>
+                {% endif %}
+                {% if order.status == 'FAILED' or job.status == 'FAILED' or job.status == 'HOLD_VERIFICATION' %}
+                    <a href="{% url 'orders:authorize_retry' order_number=order.order_number %}" class="btn btn-warning btn-sm text-dark">
+                        <i class="bi bi-arrow-repeat me-1"></i> Authorize Reprint
+                    </a>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="row g-4">
+            <!-- Left Column: Order Summary & Document Security -->
+            <div class="col-lg-7">
+                <div class="card border-0 shadow-sm rounded-4 p-4 bg-white mb-4">
+                    <h6 class="fw-bold mb-3"><i class="bi bi-file-earmark-lock text-primary me-2"></i>Document &amp; Encryption Info</h6>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-borderless">
+                            <tr>
+                                <td class="text-muted" style="width: 35%;">Original Filename:</td>
+                                <td class="fw-bold">{{ order.document.original_filename }}</td>
+                            </tr>
+                            <tr>
+                                <td class="text-muted">SHA-256 Hash:</td>
+                                <td class="font-monospace small text-truncate" style="max-width: 250px;">{{ order.document.file_hash_sha256 }}</td>
+                            </tr>
+                            <tr>
+                                <td class="text-muted">Declared Pages:</td>
+                                <td>{{ order.document.detected_page_count }}</td>
+                            </tr>
+                            <tr>
+                                <td class="text-muted">Verified by Connector:</td>
+                                <td>
+                                    {% if order.document.verified_page_count %}
+                                        <span class="badge bg-success-subtle text-success">{{ order.document.verified_page_count }} pages verified</span>
+                                    {% else %}
+                                        <span class="text-muted small">Pending local spooler inspection</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            <tr>
+                                <td class="text-muted">Confidentiality:</td>
+                                <td><span class="badge bg-light text-dark border"><i class="bi bi-shield-check text-success me-1"></i> Zero-Knowledge (AES-256-GCM)</span></td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Print Job Routing Execution -->
+                <div class="card border-0 shadow-sm rounded-4 p-4 bg-white mb-4">
+                    <h6 class="fw-bold mb-3"><i class="bi bi-printer text-primary me-2"></i>Spooler Job Execution</h6>
+                    {% if job %}
+                        <div class="p-3 bg-light rounded-3 mb-3">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <div>
+                                    <div class="text-muted small">Assigned Physical Printer:</div>
+                                    <div class="fw-bold fs-6">{{ job.printer.name|default:"Queued (Waiting for available copier)" }}</div>
+                                </div>
+                                <span class="badge badge-status-{{ job.status|lower }} px-2 py-1">
+                                    {{ job.get_status_display }}
+                                </span>
+                            </div>
+                            {% if job.failure_reason %}
+                                <div class="alert alert-danger py-2 small mb-0 mt-2">
+                                    <i class="bi bi-exclamation-triangle-fill me-1"></i> {{ job.failure_reason }}
+                                </div>
+                            {% endif %}
+                        </div>
+
+                        <!-- Attempts History -->
+                        <h6 class="small fw-bold text-muted text-uppercase mb-2">Execution Attempts Log</h6>
+                        <ul class="list-group list-group-flush small">
+                            {% for attempt in attempts %}
+                                <li class="list-group-item px-0 py-2 d-flex justify-content-between">
+                                    <div>
+                                        <span class="fw-bold">#{{ attempt.attempt_number }} - {{ attempt.status }}</span>
+                                        <div class="text-muted">{{ attempt.error_message|default:"Dispatched cleanly" }}</div>
+                                    </div>
+                                    <div class="text-muted">{{ attempt.timestamp|date:"H:i:s" }}</div>
+                                </li>
+                            {% empty %}
+                                <li class="list-group-item px-0 py-1 text-muted small">No extra attempts recorded.</li>
+                            {% endfor %}
+                        </ul>
+                    {% else %}
+                        <p class="text-muted small mb-0">No print job record generated yet.</p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Right Column: Payment & Customer Handover -->
+            <div class="col-lg-5">
+                <div class="card border-0 shadow-sm rounded-4 p-4 bg-white mb-4">
+                    <h6 class="fw-bold mb-3"><i class="bi bi-cash-stack text-success me-2"></i>Payment Verification</h6>
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <span class="text-muted">Total Charged:</span>
+                        <span class="fs-4 fw-bold text-success">₹ {{ order.total_amount }}</span>
+                    </div>
+
+                    {% for payment in payments %}
+                        <div class="border rounded-3 p-3 bg-light mb-2 small">
+                            <div class="d-flex justify-content-between mb-1">
+                                <span class="text-muted">Payment ID:</span>
+                                <span class="fw-bold">{{ payment.gateway_payment_id|default:payment.gateway_order_id }}</span>
+                            </div>
+                            <div class="d-flex justify-content-between mb-1">
+                                <span class="text-muted">Status:</span>
+                                <span class="badge {% if payment.status == 'CAPTURED' %}bg-success{% else %}bg-warning{% endif %}">{{ payment.status }}</span>
+                            </div>
+                            <div class="d-flex justify-content-between">
+                                <span class="text-muted">Verified At:</span>
+                                <span>{{ payment.verified_at|date:"d M H:i"|default:"Unverified" }}</span>
+                            </div>
+                        </div>
+                    {% empty %}
+                        <div class="text-muted small">No payment transactions recorded.</div>
+                    {% endfor %}
+
+                    {% if order.status != 'REFUNDED' and payments %}
+                        <hr class="my-3">
+                        <form method="post" action="{% url 'payments:initiate_refund' order_number=order.order_number %}" onsubmit="return confirm('Authorize full refund of ₹{{ order.total_amount }} for this order?');">
+                            {% csrf_token %}
+                            <input type="hidden" name="reason" value="Customer cancellation or hardware jam">
+                            <button type="submit" class="btn btn-outline-danger btn-sm w-100">
+                                <i class="bi bi-arrow-counterclockwise me-1"></i> Issue Refund
+                            </button>
+                        </form>
+                    {% endif %}
+                </div>
+
+                <!-- Customer Details -->
+                <div class="card border-0 shadow-sm rounded-4 p-4 bg-white">
+                    <h6 class="fw-bold mb-3"><i class="bi bi-person text-primary me-2"></i>Customer Pickup Info</h6>
+                    <div class="mb-2">
+                        <span class="text-muted small">Customer Name:</span>
+                        <div class="fw-bold">{{ order.customer_name }}</div>
+                    </div>
+                    <div class="mb-2">
+                        <span class="text-muted small">Mobile Phone:</span>
+                        <div class="fw-bold"><a href="tel:{{ order.customer_phone }}" class="text-decoration-none">{{ order.customer_phone }}</a></div>
+                    </div>
+                    <div class="mb-0">
+                        <span class="text-muted small">Preferences Summary:</span>
+                        <div class="small text-muted">
+                            {{ order.preference.color_mode }} • {{ order.preference.duplex_mode }} • {{ order.preference.paper_size }} ({{ order.preference.copies }} copies)
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,11 @@
+Django>=5.0,<7.0
+djangorestframework>=3.14.0
+qrcode>=8.0
+pillow>=10.0.0
+pymysql>=1.1.0
+cryptography>=42.0.0
+pypdf>=4.0.0
+requests>=2.31.0
+pytest>=8.0.0
+pytest-django>=4.8.0
+python-dotenv>=1.0.0

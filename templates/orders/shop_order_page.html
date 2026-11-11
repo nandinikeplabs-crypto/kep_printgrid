@@ -1,0 +1,214 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Order Print - {{ shop.name }} | KEP PrintGrid{% endblock %}
+
+{% block extra_head %}
+<!-- PDF.js for client-side secure preview & page counting -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>
+    if (window.pdfjsLib) {
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    }
+    window.PRINTGRID_SHOP_SLUG = "{{ shop.slug }}";
+    window.PRINTGRID_RSA_KEY = `{{ connector_public_key|escapejs }}`;
+</script>
+<!-- Client-side zero-knowledge encryption -->
+<script src="{% static 'js/client_crypto.js' %}"></script>
+{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <!-- Shop Header Card -->
+    <div class="card border-0 shadow-sm rounded-4 p-4 mb-4 bg-white">
+        <div class="row align-items-center g-3">
+            <div class="col-md-8">
+                <div class="d-flex align-items-center gap-2 mb-2">
+                    <span class="badge bg-primary-subtle text-primary border border-primary-subtle px-3 py-1 text-uppercase fw-bold" style="font-size:0.7rem;">Verified Print Shop</span>
+                    {% if shop.is_accepting_orders %}
+                        <span class="badge bg-success-subtle text-success border border-success-subtle px-3 py-1"><i class="bi bi-check-circle me-1"></i> Accepting Orders</span>
+                    {% else %}
+                        <span class="badge bg-warning-subtle text-warning-emphasis border border-warning px-3 py-1"><i class="bi bi-pause-circle me-1"></i> Paused</span>
+                    {% endif %}
+                </div>
+                <h3 class="fw-bold mb-1 text-dark">{{ shop.name }}</h3>
+                <div class="text-muted small mb-2"><i class="bi bi-geo-alt me-1"></i> {{ shop.address }}</div>
+                <div class="text-muted small"><i class="bi bi-telephone me-1"></i> {{ shop.phone }}</div>
+            </div>
+            <div class="col-md-4 text-md-end">
+                <div class="p-3 bg-light rounded-3 text-start d-inline-block">
+                    <div class="small fw-bold text-dark mb-1"><i class="bi bi-tag-fill text-primary me-1"></i> Standard Rates:</div>
+                    <div class="text-muted small">B&amp;W Single: ₹{{ pricing.bw_single_rate }} / page</div>
+                    <div class="text-muted small">Color Single: ₹{{ pricing.color_single_rate }} / page</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% if not shop.is_accepting_orders %}
+        <!-- Shop Paused Banner -->
+        <div class="alert alert-warning rounded-4 p-4 text-center shadow-sm">
+            <div class="display-6 mb-2"><i class="bi bi-exclamation-triangle-fill text-warning"></i></div>
+            <h4 class="fw-bold">Ordering Temporarily Paused</h4>
+            <p class="mb-0">{{ shop.pause_message }}</p>
+        </div>
+    {% else %}
+        <!-- Step-by-Step Customer Ordering Wizard -->
+        <div class="row g-4">
+            <!-- Left Column: Document Upload & Preferences -->
+            <div class="col-lg-7">
+                <!-- Step 1: Upload PDF -->
+                <div class="card border-0 shadow-sm rounded-4 p-4 mb-4 bg-white">
+                    <h5 class="fw-bold mb-3"><span class="badge bg-primary rounded-circle me-2">1</span> Select PDF Document</h5>
+                    
+                    <div class="upload-dropzone" id="uploadDropzone">
+                        <input type="file" id="pdfFileInput" accept="application/pdf" class="d-none">
+                        <div class="display-5 text-primary mb-2"><i class="bi bi-cloud-arrow-up"></i></div>
+                        <h6 class="fw-bold mb-1">Click to browse or drag and drop your PDF here</h6>
+                        <p class="text-muted small mb-0">PDF files up to 50 MB are supported. Client-side encrypted.</p>
+                    </div>
+
+                    <!-- Document Info Card -->
+                    <div class="d-none mt-3 p-3 bg-light border rounded-3" id="docInfoSection">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <div class="fw-bold text-dark text-truncate" style="max-width: 320px;" id="docName">document.pdf</div>
+                                <div class="text-muted small">Pages: <span id="docPages" class="fw-semibold text-primary">--</span> | Size: <span id="docSize">--</span></div>
+                            </div>
+                            <span class="badge bg-success-subtle text-success border border-success-subtle"><i class="bi bi-shield-lock me-1"></i> Validated</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step 2: Printing Preferences -->
+                <div class="card border-0 shadow-sm rounded-4 p-4 bg-white">
+                    <h5 class="fw-bold mb-3"><span class="badge bg-primary rounded-circle me-2">2</span> Printing Preferences</h5>
+
+                    <!-- Color Mode -->
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-muted text-uppercase">Color Mode</label>
+                        <div class="d-flex gap-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="color_mode" id="colorBw" value="BW" checked>
+                                <label class="form-check-label fw-semibold" for="colorBw">Black &amp; White</label>
+                            </div>
+                            {% if has_color_printer %}
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="color_mode" id="colorCol" value="COLOR">
+                                    <label class="form-check-label fw-semibold" for="colorCol">Colour</label>
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <!-- Duplex Mode -->
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-muted text-uppercase">Sides</label>
+                        <div class="d-flex gap-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="duplex_mode" id="duplexSingle" value="SINGLE" checked>
+                                <label class="form-check-label fw-semibold" for="duplexSingle">Single-Sided</label>
+                            </div>
+                            {% if has_duplex_printer %}
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="duplex_mode" id="duplexDouble" value="DOUBLE">
+                                    <label class="form-check-label fw-semibold" for="duplexDouble">Double-Sided (Back-to-Back)</label>
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <!-- Paper Size -->
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-muted text-uppercase">Paper Size</label>
+                        <div class="d-flex gap-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="paper_size" id="paperA4" value="A4" checked>
+                                <label class="form-check-label fw-semibold" for="paperA4">A4 (Standard)</label>
+                            </div>
+                            {% if has_a3_printer %}
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="paper_size" id="paperA3" value="A3">
+                                    <label class="form-check-label fw-semibold" for="paperA3">A3 (Large Ledger)</label>
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <!-- Copies & Range -->
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold text-muted text-uppercase">Copies</label>
+                            <input type="number" id="copiesInput" class="form-control" value="1" min="1" max="100">
+                        </div>
+                        <div class="col-md-8">
+                            <label class="form-label small fw-bold text-muted text-uppercase">Page Selection</label>
+                            <select id="pageRangeSelect" class="form-select">
+                                <option value="ALL">All Pages</option>
+                                <option value="CUSTOM">Custom Pages (e.g. 1-5, 8)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Custom Range Input -->
+                    <div class="mb-3 d-none" id="customRangeDiv">
+                        <label class="form-label small fw-bold text-muted">Enter Page Numbers / Ranges</label>
+                        <input type="text" id="customRangeInput" class="form-control" placeholder="e.g. 1-3, 5, 8-10">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column: Document Preview & Checkout -->
+            <div class="col-lg-5">
+                <!-- Preview Canvas Card -->
+                <div class="card border-0 shadow-sm rounded-4 p-4 mb-4 bg-white d-none" id="pdfPreviewContainer">
+                    <h6 class="fw-bold mb-3"><i class="bi bi-eye text-primary me-2"></i>Document Preview (Page 1)</h6>
+                    <div class="pdf-preview-box">
+                        <canvas id="pdfPreviewCanvas" class="pdf-preview-canvas"></canvas>
+                    </div>
+                </div>
+
+                <!-- Price Quote & Checkout Card -->
+                <div class="card border-0 shadow-sm rounded-4 p-4 bg-white">
+                    <h5 class="fw-bold mb-3"><span class="badge bg-primary rounded-circle me-2">3</span> Order Checkout</h5>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-muted">Your Name</label>
+                        <input type="text" id="custNameInput" class="form-control" placeholder="e.g. Anand Sharma">
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-muted">Mobile Number (Required for pickup)</label>
+                        <input type="tel" id="custPhoneInput" class="form-control" placeholder="e.g. 9876543210" required>
+                    </div>
+
+                    <hr class="my-3">
+
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span class="text-muted">Calculated Price:</span>
+                        <span class="display-6 fw-bold text-primary" id="quoteTotal">₹ 0.00</span>
+                    </div>
+
+                    <div id="quoteBreakdown" class="mb-3">
+                        <div class="text-muted small">Select a document to calculate price quote.</div>
+                    </div>
+
+                    <div class="alert alert-info py-2 small d-none" id="uploadStatusAlert"></div>
+
+                    <button type="button" id="submitOrderBtn" class="btn btn-primary btn-lg w-100 py-3 fw-bold" disabled>
+                        <i class="bi bi-credit-card me-2"></i> Pay &amp; Print Document
+                    </button>
+
+                    <div class="text-center mt-3 text-muted" style="font-size: 0.75rem;">
+                        <i class="bi bi-shield-lock-fill text-success me-1"></i> End-to-End Client Encryption Active
+                    </div>
+                </div>
+            </div>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="{% static 'js/order_flow.js' %}"></script>
+{% endblock %}

@@ -1,0 +1,80 @@
+{% extends 'base.html' %}
+
+{% block title %}Shop Settings - {{ shop.name }}{% endblock %}
+
+{% block content %}
+<div class="dashboard-container">
+    {% include 'components/dashboard_sidebar.html' %}
+
+    <div class="dashboard-main">
+        <h4 class="fw-bold mb-1">Shop Settings &amp; Availability</h4>
+        <div class="text-muted small mb-4">Manage operational hours, pause status, and contact details.</div>
+
+        <div class="row">
+            <div class="col-lg-8">
+                <div class="card border-0 shadow-sm rounded-4 p-4 bg-white">
+                    <form method="post">
+                        {% csrf_token %}
+
+                        <!-- Pause / Resume Ordering Section -->
+                        <div class="p-3 mb-4 rounded-3 border {% if shop.is_accepting_orders %}bg-light-success border-success-subtle{% else %}bg-warning-subtle border-warning{% endif %}">
+                            <div class="form-check form-switch mb-2">
+                                {{ form.is_accepting_orders }}
+                                <label class="form-check-label fw-bold" for="{{ form.is_accepting_orders.id_for_label }}">
+                                    Accepting New Print Orders
+                                </label>
+                            </div>
+                            <div class="text-muted small mb-3">
+                                When turned off, scanning the QR code informs customers that the shop is temporarily paused. Existing paid orders remain accessible to staff.
+                            </div>
+                            <div>
+                                <label class="form-label small fw-semibold text-muted">{{ form.pause_message.label }}</label>
+                                {{ form.pause_message }}
+                            </div>
+                        </div>
+
+                        <h6 class="fw-bold mb-3">Shop Profile Information</h6>
+
+                        <div class="mb-3">
+                            <label class="form-label small fw-semibold text-muted">{{ form.name.label }}</label>
+                            {{ form.name }}
+                        </div>
+
+                        <div class="row g-2 mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label small fw-semibold text-muted">{{ form.phone.label }}</label>
+                                {{ form.phone }}
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small fw-semibold text-muted">{{ form.email.label }}</label>
+                                {{ form.email }}
+                            </div>
+                        </div>
+
+                        <div class="mb-4">
+                            <label class="form-label small fw-semibold text-muted">{{ form.address.label }}</label>
+                            {{ form.address }}
+                        </div>
+
+                        <!-- Connector Authentication Credentials -->
+                        <div class="card bg-light border-0 p-3 mb-4 rounded-3">
+                            <h6 class="fw-bold mb-1 text-dark"><i class="bi bi-key-fill text-warning me-2"></i>Local Connector Credentials</h6>
+                            <p class="text-muted small mb-2">Use this secret auth token to link your Windows shop computer with the PrintGrid cloud backend.</p>
+                            <div class="input-group">
+                                <input type="text" class="form-control font-monospace small bg-white" value="{{ shop.connector_auth_token }}" readonly id="authTokenInput">
+                                <button class="btn btn-outline-secondary" type="button" onclick="navigator.clipboard.writeText(document.getElementById('authTokenInput').value); alert('Connector token copied to clipboard!');">
+                                    <i class="bi bi-clipboard"></i> Copy Token
+                                </button>
+                            </div>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary px-4 fw-semibold">
+                            Save Changes
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

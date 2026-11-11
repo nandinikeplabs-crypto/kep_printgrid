@@ -1,0 +1,84 @@
+{% extends 'base.html' %}
+
+{% block title %}Permanent Shop QR Code - {{ shop.name }}{% endblock %}
+
+{% block content %}
+<div class="dashboard-container">
+    {% include 'components/dashboard_sidebar.html' %}
+
+    <div class="dashboard-main">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h4 class="fw-bold mb-1">Permanent Shop QR Code</h4>
+                <div class="text-muted small">This QR code is permanently assigned to <strong>{{ shop.name }}</strong>. Print and place it at your counter.</div>
+            </div>
+            <form method="post">
+                {% csrf_token %}
+                <button type="submit" name="regenerate" class="btn btn-outline-secondary btn-sm">
+                    <i class="bi bi-arrow-clockwise me-1"></i> Re-Render Assets
+                </button>
+            </form>
+        </div>
+
+        <div class="row g-4">
+            <!-- QR Display Card -->
+            <div class="col-md-5">
+                <div class="card border-0 shadow-sm rounded-4 p-4 text-center bg-white">
+                    <span class="badge bg-primary px-3 py-1 mb-3 text-uppercase align-self-center">Counter Display QR</span>
+                    {% if qr_record.qr_code_image %}
+                        <div class="p-3 bg-light border rounded-3 d-inline-block mx-auto mb-3">
+                            <img src="{{ qr_record.qr_code_image.url }}" alt="Permanent QR Code" class="img-fluid" style="max-width: 260px;">
+                        </div>
+                    {% endif %}
+                    <h5 class="fw-bold mb-1">{{ shop.name }}</h5>
+                    <p class="text-muted small mb-3">{{ shop.address }}</p>
+
+                    <div class="d-grid gap-2">
+                        <a href="{% url 'core:download_qr_asset' asset_type='pdf' %}" class="btn btn-primary">
+                            <i class="bi bi-file-earmark-pdf me-2"></i> Download Printable A4 Poster (PDF)
+                        </a>
+                        <a href="{% url 'core:download_qr_asset' asset_type='png' %}" class="btn btn-outline-dark">
+                            <i class="bi bi-download me-2"></i> Download High-Res PNG
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Rules & Guidance Card -->
+            <div class="col-md-7">
+                <div class="card border-0 shadow-sm rounded-4 p-4 bg-white mb-4">
+                    <h6 class="fw-bold mb-3"><i class="bi bi-shield-check text-success me-2"></i>Permanent QR Invariant Rules</h6>
+                    <ul class="list-group list-group-flush small">
+                        <li class="list-group-item px-0 py-2 d-flex gap-2">
+                            <i class="bi bi-check-circle-fill text-success"></i>
+                            <div><strong>Never changes:</strong> Changing, replacing, or servicing physical printers will <em>never</em> invalidate this QR code.</div>
+                        </li>
+                        <li class="list-group-item px-0 py-2 d-flex gap-2">
+                            <i class="bi bi-check-circle-fill text-success"></i>
+                            <div><strong>Intelligent Routing:</strong> Customers scan this single code, and PrintGrid routes jobs to your active online printers automatically.</div>
+                        </li>
+                        <li class="list-group-item px-0 py-2 d-flex gap-2">
+                            <i class="bi bi-check-circle-fill text-success"></i>
+                            <div><strong>Temporary Pausing:</strong> If your shop is busy, simply toggle "Pause Ordering" in Settings without changing or reprinting this code.</div>
+                        </li>
+                    </ul>
+                </div>
+
+                <div class="card border-0 shadow-sm rounded-4 p-4 bg-white">
+                    <h6 class="fw-bold mb-2">Permanent Customer Ordering URL</h6>
+                    <p class="text-muted small">Customers scanning the QR code are directed to:</p>
+                    <div class="input-group mb-3">
+                        <input type="text" class="form-control bg-light" value="{{ shop.order_page_url }}" readonly id="shopUrlInput">
+                        <button class="btn btn-outline-secondary" type="button" onclick="navigator.clipboard.writeText(document.getElementById('shopUrlInput').value); alert('Copied shop URL to clipboard!');">
+                            <i class="bi bi-clipboard"></i> Copy
+                        </button>
+                        <a href="{{ shop.order_page_url }}" target="_blank" class="btn btn-outline-primary">
+                            <i class="bi bi-box-arrow-up-right"></i> Open
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
