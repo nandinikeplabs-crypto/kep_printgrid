@@ -70,8 +70,9 @@ def generate_shop_qr_code(shop):
         width=3
     )
 
-    p_draw.text((poster_w // 2, 380), shop.name.upper(), fill="#0F172A", anchor="mm")
-    p_draw.text((poster_w // 2, 430), f"Shop Address: {shop.address[:60]}", fill="#64748B", anchor="mm")
+    p_draw.text((poster_w // 2, 370), shop.name.upper(), fill="#0F172A", anchor="mm")
+    p_draw.text((poster_w // 2, 415), f"SHOP ID: {shop.shop_code or shop.slug}", fill="#2563EB", anchor="mm")
+    p_draw.text((poster_w // 2, 455), f"Address: {shop.address[:60]}", fill="#64748B", anchor="mm")
 
     # Paste QR Code into center of poster card
     display_qr_size = 650

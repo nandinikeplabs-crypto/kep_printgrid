@@ -4,36 +4,99 @@
 
 {% block content %}
 <div class="bg-dark text-white py-5 border-bottom border-secondary">
-    <div class="container py-4">
-        <div class="row align-items-center g-5">
-            <div class="col-lg-7">
-                <span class="badge bg-primary px-3 py-2 text-uppercase mb-3">Zero-Knowledge Secure Printing</span>
-                <h1 class="display-4 fw-bold mb-3">Scan. Upload. Pay. Print Instantly.</h1>
-                <p class="lead text-light mb-4">
-                    KEP PrintGrid eliminates long queues and thumb drives at Xerox shops. Customers scan a permanent shop QR code, configure printing options on mobile, pay securely, and collect printed documents at the counter.
-                </p>
-                <div class="d-flex flex-wrap gap-3">
-                    <a href="{% url 'core:register' %}" class="btn btn-primary btn-lg px-4 fw-semibold">
-                        <i class="bi bi-shop me-2"></i> Register Your Shop Free
-                    </a>
-                    <a href="{% url 'core:login' %}" class="btn btn-outline-light btn-lg px-4">
-                        Owner Login
-                    </a>
+    <div class="container py-3">
+        <div class="text-center max-w-700 mx-auto mb-5">
+            <span class="badge bg-primary px-3 py-2 text-uppercase mb-3 fw-bold tracking-wide">KEP Labs • Zero-Knowledge Print Automation</span>
+            <h1 class="display-5 fw-bold mb-3">One Unified Platform. Two Dedicated Interfaces.</h1>
+            <p class="lead text-light mb-0">
+                A seamless Xerox and institutional printing system. Choose whether you are managing your print shop or uploading documents as a customer.
+            </p>
+        </div>
+
+        <!-- TWO SEPARATE INTERFACE CARDS -->
+        <div class="row g-4 justify-content-center">
+            <!-- 1. SHOP OWNER INTERFACE -->
+            <div class="col-lg-6">
+                <div class="card h-100 border-0 shadow-lg rounded-4 p-4 p-md-5 bg-white text-dark">
+                    <div class="d-flex align-items-center gap-3 mb-3">
+                        <div class="p-3 bg-primary-subtle text-primary rounded-4 fs-2">
+                            <i class="bi bi-shop"></i>
+                        </div>
+                        <div>
+                            <span class="badge bg-primary px-2 py-1 text-uppercase" style="font-size: 0.65rem;">For Xerox Shops &amp; Institutions</span>
+                            <h3 class="fw-bold mb-0 text-dark">Shop Owner Interface</h3>
+                        </div>
+                    </div>
+                    <p class="text-muted">
+                        Register your print shop, generate your permanent counter QR code, configure dynamic pricing, manage Windows copiers, and monitor incoming queues.
+                    </p>
+                    <ul class="list-unstyled text-muted small mb-4">
+                        <li class="mb-2"><i class="bi bi-check2-circle text-primary me-2"></i> Permanent QR Stand generation (A4 PDF &amp; PNG)</li>
+                        <li class="mb-2"><i class="bi bi-check2-circle text-primary me-2"></i> Copier fleet management &amp; Windows spooler routing</li>
+                        <li class="mb-2"><i class="bi bi-check2-circle text-primary me-2"></i> Custom rates for B&amp;W, Colour, Duplex &amp; Bindings</li>
+                    </ul>
+                    <div class="d-grid gap-2 mt-auto">
+                        <a href="/register-shop/" class="btn btn-primary btn-lg fw-bold py-3 shadow-sm">
+                            <i class="bi bi-plus-circle me-2"></i> Register Shop (/register-shop)
+                        </a>
+                        <a href="/shop-login/" class="btn btn-outline-dark fw-semibold py-2">
+                            <i class="bi bi-box-arrow-in-right me-2"></i> Shop Owner Login (/shop-login)
+                        </a>
+                    </div>
                 </div>
             </div>
-            <div class="col-lg-5">
-                <div class="card border-0 shadow-lg text-dark p-4 bg-white rounded-4">
-                    <h5 class="fw-bold mb-3"><i class="bi bi-search text-primary me-2"></i> Track Your Print Order</h5>
-                    <p class="text-muted small">Enter your unique PrintGrid order number to view real-time printing progress.</p>
-                    <form onsubmit="event.preventDefault(); const val=document.getElementById('trackOrderInput').value.trim(); if(val) window.location.href='/orders/track/' + encodeURIComponent(val);">
-                        <div class="mb-3">
-                            <label class="form-label small fw-bold text-muted">Order Number</label>
-                            <input type="text" id="trackOrderInput" class="form-control form-control-lg" placeholder="e.g. ORD-20261111-9284" required>
+
+            <!-- 2. CUSTOMER INTERFACE -->
+            <div class="col-lg-6">
+                <div class="card h-100 border-0 shadow-lg rounded-4 p-4 p-md-5 bg-white text-dark">
+                    <div class="d-flex align-items-center gap-3 mb-3">
+                        <div class="p-3 bg-warning-subtle text-warning-emphasis rounded-4 fs-2">
+                            <i class="bi bi-phone"></i>
                         </div>
-                        <button type="submit" class="btn btn-dark w-100 py-2 fw-semibold">
-                            <i class="bi bi-clock-history me-1"></i> Track Order Status
-                        </button>
+                        <div>
+                            <span class="badge bg-warning text-dark px-2 py-1 text-uppercase" style="font-size: 0.65rem;">For Walk-In Customers &amp; Students</span>
+                            <h3 class="fw-bold mb-0 text-dark">Customer Interface</h3>
+                        </div>
+                    </div>
+                    <p class="text-muted">
+                        No login required. Scan the counter QR code or enter a Shop ID to upload documents, customize printing, pay securely, and collect at the counter.
+                    </p>
+
+                    <!-- Enter Shop ID or Scan with Camera -->
+                    <form onsubmit="event.preventDefault(); const id=document.getElementById('homeShopInput').value.trim(); if(id) window.open('/shop/' + encodeURIComponent(id) + '/', '_blank');" class="mb-3">
+                        <label class="form-label small fw-bold text-muted">Enter Shop ID or Scan Counter QR:</label>
+                        <div class="input-group mb-2">
+                            <span class="input-group-text bg-light"><i class="bi bi-qr-code"></i></span>
+                            <input type="text" id="homeShopInput" class="form-control" placeholder="e.g. KEP10001" value="KEP10001" required>
+                            <button type="submit" class="btn btn-warning fw-bold text-dark px-3">
+                                Go to Shop <i class="bi bi-arrow-right"></i>
+                            </button>
+                        </div>
                     </form>
+
+                    <div class="mb-3">
+                        <a href="/scanner/" class="btn btn-warning w-100 py-2 fw-bold text-dark shadow-sm">
+                            <i class="bi bi-camera me-2"></i> Open Live Camera QR Scanner (/scanner/)
+                        </a>
+                    </div>
+
+                    <!-- Track Order Form -->
+                    <form onsubmit="event.preventDefault(); const val=document.getElementById('trackOrderInput').value.trim(); if(val) window.location.href='/track-order/' + encodeURIComponent(val) + '/';" class="p-3 bg-light rounded-3 mb-4">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="small fw-bold text-dark"><i class="bi bi-search text-primary me-1"></i> Already placed an order?</span>
+                            <a href="/track-order/" class="small text-decoration-none">Track Order Page &rarr;</a>
+                        </div>
+                        <div class="input-group input-group-sm">
+                            <input type="text" id="trackOrderInput" class="form-control" placeholder="Order # (e.g. ORD-1794394027)">
+                            <button type="submit" class="btn btn-dark">Track</button>
+                        </div>
+                    </form>
+
+                    <div class="d-grid mt-auto">
+                        <a href="/shop/KEP10001/" target="_blank" class="btn btn-outline-warning text-dark fw-bold py-2">
+                            <i class="bi bi-phone me-2"></i> Open Demo Shop Ordering Page (/shop/KEP10001) <i class="bi bi-box-arrow-up-right ms-1 small"></i>
+                        </a>
+                    </div>
                 </div>
             </div>
         </div>
@@ -70,4 +133,87 @@
         </div>
     </div>
 </div>
+
+<!-- Camera QR Scanner Modal -->
+<div class="modal fade" id="qrScannerModal" tabindex="-1" aria-labelledby="qrScannerModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content rounded-4 border-0 shadow-lg">
+            <div class="modal-header bg-dark text-white rounded-top-4 border-0 py-3">
+                <h5 class="modal-title fw-bold" id="qrScannerModalLabel">
+                    <i class="bi bi-camera me-2 text-warning"></i> Point Camera at Counter QR Code
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close" onclick="stopQrScanner()"></button>
+            </div>
+            <div class="modal-body text-center p-4">
+                <p class="text-muted small mb-3">Hold your phone or laptop camera steady in front of the shop counter QR stand.</p>
+                <div id="cameraScannerView" style="width: 100%; min-height: 280px; background: #000; border-radius: 12px; overflow: hidden;"></div>
+                <div id="scannerStatusMsg" class="small text-primary mt-3 fw-semibold">
+                    <span class="spinner-border spinner-border-sm me-1"></span> Initializing camera...
+                </div>
+            </div>
+            <div class="modal-footer border-0 justify-content-center pb-4">
+                <button type="button" class="btn btn-secondary px-4 rounded-pill" data-bs-dismiss="modal" onclick="stopQrScanner()">Close Scanner</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<!-- HTML5 QR Code Scanner Library -->
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script>
+    let html5QrCode = null;
+
+    function openQrScannerModal() {
+        const modal = new bootstrap.Modal(document.getElementById('qrScannerModal'));
+        modal.show();
+
+        const statusEl = document.getElementById('scannerStatusMsg');
+        statusEl.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Starting camera viewfinder...';
+
+        setTimeout(() => {
+            html5QrCode = new Html5Qrcode("cameraScannerView");
+            const config = { fps: 10, qrbox: { width: 250, height: 250 } };
+
+            html5QrCode.start(
+                { facingMode: "environment" },
+                config,
+                (decodedText, decodedResult) => {
+                    // Success callback
+                    statusEl.innerHTML = '<i class="bi bi-check-circle-fill text-success me-1"></i> QR Code Recognized! Redirecting...';
+                    stopQrScanner();
+                    
+                    // Redirect to scanned destination
+                    if (decodedText.startsWith('http://') || decodedText.startsWith('https://')) {
+                        window.location.href = decodedText;
+                    } else if (decodedText.startsWith('/shop/')) {
+                        window.location.href = decodedText;
+                    } else {
+                        window.location.href = '/shop/' + encodeURIComponent(decodedText) + '/';
+                    }
+                },
+                (errorMessage) => {
+                    // Scanning error (ignore frame by frame errors)
+                }
+            ).then(() => {
+                statusEl.innerHTML = '<i class="bi bi-broadcast text-success me-1"></i> Camera Active. Point directly at the Shop QR stand.';
+            }).catch(err => {
+                statusEl.innerHTML = '<span class="text-danger"><i class="bi bi-exclamation-triangle-fill me-1"></i> Camera permission denied or no camera detected.</span>';
+                console.warn("Camera start failed:", err);
+            });
+        }, 500);
+    }
+
+    function stopQrScanner() {
+        if (html5QrCode) {
+            html5QrCode.stop().then(() => {
+                html5QrCode.clear();
+                html5QrCode = null;
+            }).catch(err => {
+                console.warn("Stop scanner error:", err);
+            });
+        }
+    }
+</script>
 {% endblock %}

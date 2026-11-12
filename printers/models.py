@@ -25,6 +25,23 @@ class Printer(models.Model):
         ordering = ['-is_default', 'name']
         unique_together = ('shop', 'system_printer_name')
 
+    @property
+    def printer_code(self):
+        return f"PRN-{str(self.id)[:8].upper()}"
+
+    @property
+    def detailed_status(self):
+        if not self.is_active:
+            return "Disabled"
+        if not self.is_online:
+            return "Offline"
+        msg = (self.last_status_message or "").lower()
+        if "busy" in msg or "printing" in msg:
+            return "Busy"
+        if "error" in msg or "jam" in msg or "out of paper" in msg:
+            return "Error"
+        return "Connected"
+
     def __str__(self):
         status = "Online" if self.is_online else "Offline"
         active = "Active" if self.is_active else "Disabled"

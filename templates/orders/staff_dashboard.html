@@ -91,7 +91,13 @@
                         <tbody>
                             {% for order in ready_jobs %}
                                 <tr>
-                                    <td class="fw-bold"><a href="{% url 'orders:order_detail' order_number=order.order_number %}" class="text-decoration-none">{{ order.order_number }}</a></td>
+                                    <td class="fw-bold">
+                                        {% if order.order_number %}
+                                            <a href="{% url 'orders:order_detail' order_number=order.order_number %}" class="text-decoration-none">{{ order.order_number }}</a>
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
                                     <td>{{ order.customer_name }}</td>
                                     <td>{{ order.customer_phone }}</td>
                                     <td class="text-muted small">{{ order.updated_at|timesince }} ago</td>

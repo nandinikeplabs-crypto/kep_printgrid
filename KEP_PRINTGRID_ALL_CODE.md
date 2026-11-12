@@ -5,7 +5,10 @@ This single file contains the entire source code for all backend models, views, 
 ## Table of Files Included
 
 - `.env.example`
+- `.vscode/launch.json`
 - `README.md`
+- `SHOP_CODE.md`
+- `USER_CODE.md`
 - `bundle_codebase.py`
 - `connector/client.py`
 - `connector/crypto_manager.py`
@@ -28,6 +31,7 @@ This single file contains the entire source code for all backend models, views, 
 - `core/management/commands/__init__.py`
 - `core/management/commands/seed_demo_data.py`
 - `core/migrations/0001_initial.py`
+- `core/migrations/0002_shop_institution_type_shop_is_checkout_enabled_and_more.py`
 - `core/migrations/__init__.py`
 - `core/models.py`
 - `core/services/__init__.py`
@@ -47,6 +51,7 @@ This single file contains the entire source code for all backend models, views, 
 - `orders/apps.py`
 - `orders/forms.py`
 - `orders/migrations/0001_initial.py`
+- `orders/migrations/0002_pricingrule_lamination_rate_and_more.py`
 - `orders/migrations/__init__.py`
 - `orders/models.py`
 - `orders/tests.py`
@@ -133,6 +138,61 @@ PAYMENT_SANDBOX_MODE=True
 
 # Base URL for permanent QR codes
 BASE_APP_URL=http://127.0.0.1:8000
+
+```
+
+---
+
+## File: `.vscode/launch.json`
+
+```json
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "KEP PrintGrid: Django Server (Port 8080)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/manage.py",
+            "args": [
+                "runserver",
+                "127.0.0.1:8080"
+            ],
+            "django": true,
+            "justMyCode": true
+        },
+        {
+            "name": "KEP PrintGrid: ASGI Server (Uvicorn Port 8080)",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "uvicorn",
+            "args": [
+                "kep_printgrid.asgi:application",
+                "--host",
+                "127.0.0.1",
+                "--port",
+                "8080",
+                "--reload"
+            ],
+            "justMyCode": true
+        },
+        {
+            "name": "KEP PrintGrid: Local Printer Connector",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/connector/run_connector.py",
+            "args": [
+                "--server",
+                "http://127.0.0.1:8080",
+                "--token",
+                "metro_demo_auth_token_991823719827391827",
+                "--shop",
+                "metro-xerox"
+            ],
+            "justMyCode": true
+        }
+    ]
+}
 
 ```
 
@@ -316,6 +376,779 @@ python connector/run_connector.py --server http://127.0.0.1:8000 --token metro_d
 - `POST /printers/api/connector/heartbeat/`: Reports live status of installed copiers.
 - `GET  /printers/api/connector/poll-jobs/`: Polls authorized print jobs for dispatch.
 - `POST /printers/api/connector/update-job-status/`: Updates status (`RECEIVED`, `SUBMITTED`, `PRINTED`, `FAILED`).
+
+```
+
+---
+
+## File: `SHOP_CODE.md`
+
+```markdown
+# KEP PrintGrid - Shop Module Codebase
+
+This document contains all source code related to **Shops, Permanent QR Codes, Printer Management, Pricing, and Shop Operations** in KEP PrintGrid.
+
+---
+
+## 1. Shop & Staff Models (`core/models.py`)
+
+```python
+import uuid
+import secrets
+from django.db import models
+from django.utils.text import slugify
+
+class Shop(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=150)
+    owner = models.ForeignKey('core.User', on_delete=models.CASCADE, related_name='owned_shops')
+    slug = models.SlugField(max_length=180, unique=True, db_index=True)
+    phone = models.CharField(max_length=25)
+    email = models.EmailField()
+    address = models.TextField()
+
+    # Operations status
+    is_accepting_orders = models.BooleanField(default=True)
+    pause_message = models.CharField(
+        max_length=255,
+        default="This shop is temporarily paused and not accepting new print orders at the moment."
+    )
+
+    # Windows Local Connector authentication & document encryption key
+    connector_auth_token = models.CharField(max_length=128, unique=True, blank=True)
+    connector_public_key = models.TextField(
+        blank=True,
+        help_text="RSA Public Key (PEM) uploaded by the local connector for client-side document key wrapping."
+    )
+    connector_last_seen = models.DateTimeField(null=True, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            base_slug = slugify(self.name) or "shop"
+            unique_part = uuid.uuid4().hex[:8]
+            self.slug = f"{base_slug}-{unique_part}"
+        if not self.connector_auth_token:
+            self.connector_auth_token = secrets.token_urlsafe(48)
+        super().save(*args, **kwargs)
+
+    @property
+    def order_page_url(self):
+        from django.conf import settings
+        base_url = getattr(settings, 'BASE_APP_URL', 'http://127.0.0.1:8080').rstrip('/')
+        return f"{base_url}/shop/{self.slug}/"
+
+
+class ShopStaff(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    shop = models.ForeignKey(Shop, on_delete=models.CASCADE, related_name='staff_members')
+    user = models.OneToOneField('core.User', on_delete=models.CASCADE, related_name='staff_profile')
+    can_manage_printers = models.BooleanField(default=False)
+    can_authorize_retries = models.BooleanField(default=True)
+    can_manage_pricing = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+
+class ShopQRCode(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    shop = models.OneToOneField(Shop, on_delete=models.CASCADE, related_name='qr_code')
+    qr_code_image = models.ImageField(upload_to='qr_codes/', blank=True, null=True)
+    qr_target_url = models.CharField(max_length=500)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+
+class AuditLog(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    shop = models.ForeignKey(Shop, on_delete=models.CASCADE, null=True, blank=True, related_name='audit_logs')
+    user = models.ForeignKey('core.User', on_delete=models.SET_NULL, null=True, blank=True)
+    action = models.CharField(max_length=100)
+    resource_type = models.CharField(max_length=100)
+    resource_id = models.CharField(max_length=100)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    details = models.JSONField(default=dict)
+    created_at = models.DateTimeField(auto_now_add=True)
+```
+
+---
+
+## 2. Permanent QR Code Service (`core/services/qr_service.py`)
+
+```python
+import os
+import qrcode
+from PIL import Image, ImageDraw
+from django.conf import settings
+
+def generate_shop_qr_code(shop):
+    """
+    Generates a permanent QR code PNG and printable A4 PDF poster stand for the shop.
+    Changing printers never invalidates this QR code.
+    """
+    from core.models import ShopQRCode
+
+    target_url = shop.order_page_url
+
+    # 1. Generate QR Code image with Pillow
+    qr = qrcode.QRCode(
+        version=1,
+        error_correction=qrcode.constants.ERROR_CORRECT_H,
+        box_size=12,
+        border=4,
+    )
+    qr.add_data(target_url)
+    qr.make(fit=True)
+
+    qr_img = qr.make_image(fill_color="#0F172A", back_color="#FFFFFF").convert("RGB")
+
+    # Save PNG
+    qr_filename = f"shop_qr_{shop.slug}.png"
+    qr_rel_path = f"qr_codes/{qr_filename}"
+    full_qr_path = os.path.join(settings.MEDIA_ROOT, qr_rel_path)
+    os.makedirs(os.path.dirname(full_qr_path), exist_ok=True)
+    qr_img.save(full_qr_path, format="PNG")
+
+    # 2. Generate Printable A4 Poster (1240 x 1754 px @ 150 DPI)
+    poster_w, poster_h = 1240, 1754
+    poster = Image.new("RGB", (poster_w, poster_h), color="#F8FAFC")
+    p_draw = ImageDraw.Draw(poster)
+
+    # Top header banner
+    p_draw.rectangle([0, 0, poster_w, 240], fill="#0F172A")
+    p_draw.text((poster_w // 2, 70), "KEP PRINTGRID", fill="#38BDF8", anchor="mm")
+    p_draw.text((poster_w // 2, 140), "Self-Service Document Printing", fill="#FFFFFF", anchor="mm")
+    p_draw.text((poster_w // 2, 190), "Scan • Upload • Pay • Print Instantly", fill="#94A3B8", anchor="mm")
+
+    # Shop Name Card
+    p_draw.rounded_rectangle([80, 300, poster_w - 80, 1580], radius=24, fill="#FFFFFF", outline="#E2E8F0", width=3)
+    p_draw.text((poster_w // 2, 380), shop.name.upper(), fill="#0F172A", anchor="mm")
+    p_draw.text((poster_w // 2, 430), f"Shop Address: {shop.address[:60]}", fill="#64748B", anchor="mm")
+
+    # Paste QR Code
+    display_qr_size = 650
+    resized_qr = qr_img.resize((display_qr_size, display_qr_size), Image.Resampling.LANCZOS)
+    qr_x = (poster_w - display_qr_size) // 2
+    poster.paste(resized_qr, (qr_x, 500))
+
+    # Instructions
+    p_draw.text((poster_w // 2, 1220), "HOW TO PRINT:", fill="#0F172A", anchor="mm")
+    p_draw.text((poster_w // 2, 1280), "1. Scan this permanent QR code using your phone camera", fill="#334155", anchor="mm")
+    p_draw.text((poster_w // 2, 1340), "2. Choose your PDF document and printing preferences", fill="#334155", anchor="mm")
+    p_draw.text((poster_w // 2, 1400), "3. Pay securely online (UPI / Card / NetBanking)", fill="#334155", anchor="mm")
+    p_draw.text((poster_w // 2, 1460), "4. Collect your freshly printed pages at the counter!", fill="#2563EB", anchor="mm")
+
+    pdf_filename = f"shop_qr_{shop.slug}_poster.pdf"
+    full_pdf_path = os.path.join(settings.MEDIA_ROOT, "qr_codes", pdf_filename)
+    poster.save(full_pdf_path, "PDF", resolution=150.0)
+
+    qrcode_obj, _ = ShopQRCode.objects.update_or_create(
+        shop=shop,
+        defaults={'qr_code_image': qr_rel_path, 'qr_target_url': target_url}
+    )
+    return qrcode_obj
+```
+
+---
+
+## 3. Shop Operations & Dashboard Views (`core/views.py`)
+
+```python
+from django.shortcuts import render, redirect, get_object_or_404
+from django.contrib import messages
+from django.utils import timezone
+from django.db.models import Sum, Q
+from decimal import Decimal
+import os
+from django.http import FileResponse, Http404
+
+from .models import Shop, AuditLog
+from .forms import ShopSettingsForm, StaffCreateForm
+from .decorators import owner_required, get_user_shop
+from core.services.qr_service import generate_shop_qr_code
+from orders.models import PrintOrder
+from printers.models import Printer
+
+
+@owner_required
+def owner_overview(request):
+    shop = get_user_shop(request.user)
+    now = timezone.now()
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+
+    shop_orders = PrintOrder.objects.filter(shop=shop)
+    total_orders = shop_orders.count()
+    today_orders = shop_orders.filter(created_at__gte=today_start).count()
+    pending_orders = shop_orders.filter(status__in=[
+        PrintOrder.Status.PAYMENT_VERIFIED,
+        PrintOrder.Status.QUEUED,
+        PrintOrder.Status.ASSIGNED
+    ]).count()
+    printing_orders = shop_orders.filter(status__in=[
+        PrintOrder.Status.SENT_TO_PRINTER,
+        PrintOrder.Status.PRINTING
+    ]).count()
+
+    today_revenue = shop_orders.filter(
+        created_at__gte=today_start,
+        status__in=[PrintOrder.Status.PAYMENT_VERIFIED, PrintOrder.Status.COMPLETED]
+    ).aggregate(Sum('total_amount'))['total_amount__sum'] or Decimal('0.00')
+
+    shop_printers = Printer.objects.filter(shop=shop)
+    online_printers = shop_printers.filter(is_online=True, is_active=True).count()
+    offline_printers = shop_printers.filter(Q(is_online=False) | Q(is_active=False)).count()
+
+    return render(request, 'core/owner_overview.html', {
+        'shop': shop,
+        'total_orders': total_orders,
+        'today_orders': today_orders,
+        'pending_orders': pending_orders,
+        'printing_orders': printing_orders,
+        'today_revenue': today_revenue,
+        'online_printers': online_printers,
+        'offline_printers': offline_printers,
+        'shop_printers': shop_printers,
+    })
+
+
+@owner_required
+def shop_qr_management(request):
+    shop = get_user_shop(request.user)
+    qr_record = getattr(shop, 'qr_code', None) or generate_shop_qr_code(shop)
+    return render(request, 'core/shop_qr_management.html', {'shop': shop, 'qr_record': qr_record})
+
+
+@owner_required
+def download_qr_asset(request, asset_type):
+    shop = get_user_shop(request.user)
+    if asset_type == 'png':
+        qr_path = os.path.join('media', 'qr_codes', f"shop_qr_{shop.slug}.png")
+        return FileResponse(open(qr_path, 'rb'), as_attachment=True, filename=f"{shop.slug}_qr.png")
+    elif asset_type == 'pdf':
+        pdf_path = os.path.join('media', 'qr_codes', f"shop_qr_{shop.slug}_poster.pdf")
+        return FileResponse(open(pdf_path, 'rb'), as_attachment=True, filename=f"{shop.slug}_poster.pdf")
+    raise Http404("Asset not found")
+
+
+@owner_required
+def shop_settings(request):
+    shop = get_user_shop(request.user)
+    if request.method == 'POST':
+        form = ShopSettingsForm(request.POST, instance=shop)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Shop settings saved successfully.")
+            return redirect('core:shop_settings')
+    else:
+        form = ShopSettingsForm(instance=shop)
+    return render(request, 'core/shop_settings.html', {'shop': shop, 'form': form})
+```
+
+---
+
+## 4. Intelligent Printer Routing for Shops (`printers/services/routing_service.py`)
+
+```python
+from django.utils import timezone
+from django.db import transaction
+from printers.models import Printer, PrinterAssignment
+from orders.models import PrintOrder, PrintJob, PrintJobAttempt
+
+class RoutingService:
+    @classmethod
+    def determine_target_printer(cls, shop, preference):
+        """
+        Intelligently selects the best available printer matching color, duplex, and paper size.
+        """
+        is_color = preference.color_mode == 'COLOR'
+        is_double = preference.duplex_mode == 'DOUBLE'
+
+        assignment_key = PrinterAssignment.AssignmentType.COLOR_SINGLE if is_color else PrinterAssignment.AssignmentType.BW_SINGLE
+
+        assignment = PrinterAssignment.objects.filter(shop=shop, assignment_type=assignment_key).first()
+        if assignment and assignment.primary_printer.is_online and assignment.primary_printer.is_active:
+            return assignment.primary_printer
+
+        # Fallback to default printer if capable
+        default = Printer.objects.filter(shop=shop, is_default=True, is_active=True, is_online=True).first()
+        if default and default.can_print(preference.color_mode, preference.duplex_mode, preference.paper_size):
+            return default
+
+        # Any eligible online printer
+        for p in Printer.objects.filter(shop=shop, is_active=True, is_online=True):
+            if p.can_print(preference.color_mode, preference.duplex_mode, preference.paper_size):
+                return p
+        return None
+
+    @classmethod
+    @transaction.atomic
+    def route_paid_order(cls, order: PrintOrder) -> PrintJob:
+        if hasattr(order, 'print_job'):
+            return order.print_job
+
+        target_printer = cls.determine_target_printer(order.shop, order.preference)
+        job = PrintJob(order=order)
+
+        if target_printer:
+            job.printer = target_printer
+            job.status = PrintJob.Status.DISPATCHED
+            job.dispatched_at = timezone.now()
+            order.status = PrintOrder.Status.ASSIGNED
+        else:
+            job.status = PrintJob.Status.QUEUED
+            order.status = PrintOrder.Status.QUEUED
+
+        job.save()
+        order.save()
+        return job
+```
+
+---
+
+## 5. Shop Pricing Rules (`orders/models.py`)
+
+```python
+from decimal import Decimal
+from django.db import models
+
+class PricingRule(models.Model):
+    shop = models.ForeignKey('core.Shop', on_delete=models.CASCADE, related_name='pricing_rules')
+    bw_single_rate = models.DecimalField(max_digits=6, decimal_places=2, default=Decimal('2.00'))
+    bw_double_rate = models.DecimalField(max_digits=6, decimal_places=2, default=Decimal('3.50'))
+    color_single_rate = models.DecimalField(max_digits=6, decimal_places=2, default=Decimal('10.00'))
+    color_double_rate = models.DecimalField(max_digits=6, decimal_places=2, default=Decimal('18.00'))
+    a3_bw_rate = models.DecimalField(max_digits=6, decimal_places=2, default=Decimal('5.00'))
+    a3_color_rate = models.DecimalField(max_digits=6, decimal_places=2, default=Decimal('20.00'))
+    is_active = models.BooleanField(default=True)
+
+    def calculate_price(self, preference, num_pages: int) -> dict:
+        copies = max(1, preference.copies)
+        pages = max(1, num_pages)
+        color = preference.color_mode
+        duplex = preference.duplex_mode
+
+        if color == 'COLOR':
+            unit_rate = self.color_double_rate if duplex == 'DOUBLE' else self.color_single_rate
+        else:
+            unit_rate = self.bw_double_rate if duplex == 'DOUBLE' else self.bw_single_rate
+
+        sheets = (pages + 1) // 2 if duplex == 'DOUBLE' else pages
+        total = round(unit_rate * sheets * copies, 2)
+
+        return {
+            'unit_rate': float(unit_rate),
+            'total_sheets': sheets * copies,
+            'total_amount': float(total),
+            'currency': 'INR'
+        }
+```
+
+---
+
+## 6. Shop & Permanent QR Unit Tests (`tests/test_qr_and_shop.py`)
+
+```python
+from django.test import TestCase, Client
+from django.urls import reverse
+from core.models import User, Shop
+from printers.models import Printer
+from core.services.qr_service import generate_shop_qr_code
+
+class ShopAndQRTests(TestCase):
+    def setUp(self):
+        self.owner = User.objects.create_user(username='o1', email='o1@test.com', password='Password123!')
+        self.shop = Shop.objects.create(name='Test Xerox', owner=self.owner, phone='9876543210', address='Main Gate')
+        self.qr = generate_shop_qr_code(self.shop)
+
+    def test_qr_never_changes_after_printer_switch(self):
+        initial_qr = self.qr.qr_target_url
+        p1 = Printer.objects.create(shop=self.shop, name='P1', system_printer_name='HP_Laser', is_default=True)
+        p2 = Printer.objects.create(shop=self.shop, name='P2', system_printer_name='Canon_IR', is_default=False)
+        p1.delete()
+        p2.is_default = True
+        p2.save()
+
+        self.qr.refresh_from_db()
+        self.assertEqual(self.qr.qr_target_url, initial_qr)
+```
+
+```
+
+---
+
+## File: `USER_CODE.md`
+
+```markdown
+# KEP PrintGrid - User Module Codebase
+
+This document contains all source code related to **Users, Roles, Authentication, Registration, and Session Security** in KEP PrintGrid.
+
+---
+
+## 1. User Model (`core/models.py`)
+
+```python
+from django.db import models
+from django.contrib.auth.models import AbstractUser
+
+class User(AbstractUser):
+    class Role(models.TextChoices):
+        OWNER = 'OWNER', 'Shop Owner / Admin'
+        STAFF = 'STAFF', 'Shop Staff'
+        CUSTOMER = 'CUSTOMER', 'Customer'
+
+    role = models.CharField(
+        max_length=20,
+        choices=Role.choices,
+        default=Role.CUSTOMER
+    )
+    phone_number = models.CharField(max_length=20, blank=True, null=True)
+
+    def is_owner(self):
+        return self.role == self.Role.OWNER
+
+    def is_staff_member(self):
+        return self.role == self.Role.STAFF
+
+    def is_customer(self):
+        return self.role == self.Role.CUSTOMER
+```
+
+---
+
+## 2. User Forms & Validation (`core/forms.py`)
+
+```python
+from django import forms
+from django.contrib.auth import authenticate
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError
+from django.db import transaction
+from .models import User, Shop, ShopStaff
+from orders.models import PricingRule
+from core.services.qr_service import generate_shop_qr_code
+
+
+class ShopOwnerRegistrationForm(forms.Form):
+    shop_name = forms.CharField(
+        max_length=150,
+        label="Shop Name",
+        widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'e.g. Metro Xerox & Print Centre'})
+    )
+    owner_name = forms.CharField(
+        max_length=150,
+        label="Owner Full Name",
+        widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'e.g. Ramesh Kumar'})
+    )
+    email = forms.EmailField(
+        label="Email Address",
+        widget=forms.EmailInput(attrs={'class': 'form-control', 'placeholder': 'ramesh@printgrid.example'})
+    )
+    mobile_number = forms.CharField(
+        max_length=20,
+        label="Mobile Number",
+        widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'e.g. +91 9876543210'})
+    )
+    password = forms.CharField(
+        label="Password",
+        widget=forms.PasswordInput(attrs={'class': 'form-control', 'placeholder': 'At least 8 characters'})
+    )
+    confirm_password = forms.CharField(
+        label="Confirm Password",
+        widget=forms.PasswordInput(attrs={'class': 'form-control', 'placeholder': 'Repeat your password'})
+    )
+    shop_address = forms.CharField(
+        label="Shop Address",
+        widget=forms.Textarea(attrs={'class': 'form-control', 'rows': 3, 'placeholder': 'Shop Address'})
+    )
+
+    def clean_email(self):
+        email = self.cleaned_data.get('email', '').lower().strip()
+        if User.objects.filter(email=email).exists():
+            raise ValidationError("An account with this email address already exists. Please log in.")
+        return email
+
+    def clean(self):
+        cleaned_data = super().clean()
+        password = cleaned_data.get("password")
+        confirm_password = cleaned_data.get("confirm_password")
+
+        if password and confirm_password:
+            if password != confirm_password:
+                self.add_error('confirm_password', "Passwords do not match.")
+            else:
+                validate_password(password)
+        return cleaned_data
+
+    @transaction.atomic
+    def save(self):
+        email = self.cleaned_data['email']
+        owner_name = self.cleaned_data['owner_name']
+        username = email.split('@')[0]
+        base_username = username
+        counter = 1
+        while User.objects.filter(username=username).exists():
+            username = f"{base_username}_{counter}"
+            counter += 1
+
+        first_name = owner_name.split()[0] if owner_name else ""
+        last_name = " ".join(owner_name.split()[1:]) if " " in owner_name else ""
+
+        user = User.objects.create_user(
+            username=username,
+            email=email,
+            password=self.cleaned_data['password'],
+            first_name=first_name,
+            last_name=last_name,
+            role=User.Role.OWNER,
+            phone_number=self.cleaned_data['mobile_number']
+        )
+
+        shop = Shop.objects.create(
+            name=self.cleaned_data['shop_name'],
+            owner=user,
+            phone=self.cleaned_data['mobile_number'],
+            email=email,
+            address=self.cleaned_data['shop_address'],
+            is_accepting_orders=True
+        )
+
+        PricingRule.objects.create(shop=shop)
+        generate_shop_qr_code(shop)
+        return user, shop
+
+
+class LoginForm(forms.Form):
+    email_or_username = forms.CharField(
+        label="Email or Username",
+        widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'name@example.com'})
+    )
+    password = forms.CharField(
+        label="Password",
+        widget=forms.PasswordInput(attrs={'class': 'form-control', 'placeholder': '••••••••'})
+    )
+
+    def clean(self):
+        cleaned_data = super().clean()
+        login_val = cleaned_data.get('email_or_username', '').strip()
+        password = cleaned_data.get('password')
+
+        if login_val and password:
+            user = None
+            if '@' in login_val:
+                try:
+                    user_obj = User.objects.get(email__iexact=login_val)
+                    user = authenticate(username=user_obj.username, password=password)
+                except User.DoesNotExist:
+                    user = None
+            else:
+                user = authenticate(username=login_val, password=password)
+
+            if not user:
+                raise ValidationError("Invalid email/username or password. Please try again.")
+            if not user.is_active:
+                raise ValidationError("This account is currently disabled.")
+
+            cleaned_data['authenticated_user'] = user
+
+        return cleaned_data
+```
+
+---
+
+## 3. User Role-Based Access Control (`core/decorators.py`)
+
+```python
+from functools import wraps
+from django.shortcuts import redirect
+from django.contrib import messages
+
+def owner_required(view_func):
+    @wraps(view_func)
+    def _wrapped_view(request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return redirect('core:login')
+        if not (request.user.is_owner() or request.user.is_superuser):
+            messages.error(request, "Access denied. Only registered shop owners can access this section.")
+            return redirect('core:dashboard')
+        return view_func(request, *args, **kwargs)
+    return _wrapped_view
+
+
+def staff_or_owner_required(view_func):
+    @wraps(view_func)
+    def _wrapped_view(request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return redirect('core:login')
+        if not (request.user.is_owner() or request.user.is_staff_member() or request.user.is_superuser):
+            messages.error(request, "Access restricted to shop owners and authorized staff members.")
+            return redirect('core:login')
+        return view_func(request, *args, **kwargs)
+    return _wrapped_view
+```
+
+---
+
+## 4. User Views (`core/views.py`)
+
+```python
+from django.shortcuts import render, redirect
+from django.contrib.auth import login, logout
+from django.contrib import messages
+from .models import User, AuditLog
+from .forms import ShopOwnerRegistrationForm, LoginForm
+from .decorators import staff_or_owner_required
+
+def register_owner(request):
+    if request.user.is_authenticated:
+        return redirect('core:dashboard')
+
+    if request.method == 'POST':
+        form = ShopOwnerRegistrationForm(request.POST)
+        if form.is_valid():
+            user, shop = form.save()
+            login(request, user)
+            AuditLog.objects.create(
+                shop=shop,
+                user=user,
+                action='SHOP_REGISTERED',
+                resource_type='Shop',
+                resource_id=str(shop.id),
+                details={'shop_name': shop.name}
+            )
+            messages.success(request, f"Welcome to KEP PrintGrid! Your shop '{shop.name}' is now active.")
+            return redirect('core:owner_overview')
+    else:
+        form = ShopOwnerRegistrationForm()
+    return render(request, 'core/register.html', {'form': form})
+
+
+def user_login(request):
+    if request.user.is_authenticated:
+        return redirect('core:dashboard')
+
+    if request.method == 'POST':
+        form = LoginForm(request.POST)
+        if form.is_valid():
+            user = form.cleaned_data['authenticated_user']
+            login(request, user)
+            messages.success(request, f"Welcome back, {user.first_name or user.username}!")
+            return redirect('core:dashboard')
+    else:
+        form = LoginForm()
+    return render(request, 'core/login.html', {'form': form})
+
+
+def user_logout(request):
+    logout(request)
+    messages.info(request, "You have been logged out safely.")
+    return redirect('core:login')
+
+
+@staff_or_owner_required
+def dashboard_dispatch(request):
+    if request.user.is_owner() or request.user.is_superuser:
+        return redirect('core:owner_overview')
+    elif request.user.is_staff_member():
+        return redirect('orders:staff_dashboard')
+    return redirect('core:home')
+```
+
+---
+
+## 5. User Login Template (`templates/core/login.html`)
+
+```html
+{% extends 'base.html' %}
+
+{% block title %}Sign In - KEP PrintGrid{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-md-5 col-lg-4">
+            <div class="card border-0 shadow-sm rounded-4 p-4 p-md-5 bg-white">
+                <div class="text-center mb-4">
+                    <h3 class="fw-bold">Sign In</h3>
+                    <p class="text-muted small">Access your Shop Admin or Staff Console.</p>
+                </div>
+
+                <form method="post" novalidate>
+                    {% csrf_token %}
+                    {% if form.non_field_errors %}
+                        <div class="alert alert-danger py-2 small">
+                            {% for error in form.non_field_errors %}
+                                <div>{{ error }}</div>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold small text-muted">Email or Username</label>
+                        {{ form.email_or_username }}
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="form-label fw-semibold small text-muted">Password</label>
+                        {{ form.password }}
+                    </div>
+
+                    <button type="submit" class="btn btn-primary w-100 py-2 fw-semibold">Sign In</button>
+                </form>
+
+                <div class="text-center mt-4 small text-muted">
+                    Need a shop account? <a href="{% url 'core:register' %}">Register Shop</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+```
+
+---
+
+## 6. User Unit & Integration Tests (`tests/test_auth.py`)
+
+```python
+from django.test import TestCase, Client
+from django.urls import reverse
+from core.models import User, Shop
+
+class AuthenticationTests(TestCase):
+    def setUp(self):
+        self.client = Client()
+
+    def test_valid_registration(self):
+        payload = {
+            'shop_name': 'Express Print Hub',
+            'owner_name': 'Rohit Sharma',
+            'email': 'rohit@express.example',
+            'mobile_number': '+91 9876543210',
+            'password': 'SecurePassword123!',
+            'confirm_password': 'SecurePassword123!',
+            'shop_address': 'Shop 10, Metro Station Complex',
+        }
+        resp = self.client.post(reverse('core:register'), payload)
+        self.assertEqual(resp.status_code, 302)
+        self.assertTrue(User.objects.filter(email='rohit@express.example').exists())
+
+    def test_duplicate_email_rejected(self):
+        User.objects.create_user(username='u1', email='dup@test.com', password='Password123!')
+        payload = {
+            'shop_name': 'Shop 2',
+            'owner_name': 'Owner',
+            'email': 'dup@test.com',
+            'mobile_number': '+91 9999999999',
+            'password': 'Password123!',
+            'confirm_password': 'Password123!',
+            'shop_address': 'Main Road'
+        }
+        resp = self.client.post(reverse('core:register'), payload)
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn('email', resp.context['form'].errors)
+```
 
 ```
 
@@ -2097,6 +2930,67 @@ class Migration(migrations.Migration):
 
 ---
 
+## File: `core/migrations/0002_shop_institution_type_shop_is_checkout_enabled_and_more.py`
+
+```python
+# Generated by Django 6.1.3 on 2026-11-11 10:30
+
+from django.db import migrations, models
+
+
+class Migration(migrations.Migration):
+
+    dependencies = [
+        ('core', '0001_initial'),
+    ]
+
+    operations = [
+        migrations.AddField(
+            model_name='shop',
+            name='institution_type',
+            field=models.CharField(blank=True, default='Commercial Xerox Shop', max_length=50),
+        ),
+        migrations.AddField(
+            model_name='shop',
+            name='is_checkout_enabled',
+            field=models.BooleanField(default=True, help_text='The QR is available during setup, but checkout stays disabled until shop is ready.'),
+        ),
+        migrations.AddField(
+            model_name='shop',
+            name='is_institution',
+            field=models.BooleanField(default=False, help_text='Shop or educational/corporate institution'),
+        ),
+        migrations.AddField(
+            model_name='shop',
+            name='plan_active',
+            field=models.BooleanField(default=True),
+        ),
+        migrations.AddField(
+            model_name='shop',
+            name='plan_tier',
+            field=models.CharField(choices=[('TRIAL', 'Trial Plan'), ('STARTER', 'Starter Plan'), ('PRO', 'Pro Business Plan'), ('ENTERPRISE', 'Institutional Enterprise')], default='TRIAL', max_length=20),
+        ),
+        migrations.AddField(
+            model_name='shop',
+            name='setup_step_completed',
+            field=models.PositiveSmallIntegerField(default=8),
+        ),
+        migrations.AddField(
+            model_name='shop',
+            name='test_order_completed',
+            field=models.BooleanField(default=False, help_text='Confirmed physical test printout'),
+        ),
+        migrations.AlterField(
+            model_name='user',
+            name='role',
+            field=models.CharField(choices=[('KEP_ADMIN', 'KEP Platform Administrator'), ('OWNER', 'Shop / Institution Administrator'), ('STAFF', 'Shop Operator / Staff'), ('CUSTOMER', 'Customer')], default='CUSTOMER', max_length=20),
+        ),
+    ]
+
+```
+
+---
+
 ## File: `core/migrations/__init__.py`
 
 ```python
@@ -2117,8 +3011,9 @@ from django.utils.text import slugify
 
 class User(AbstractUser):
     class Role(models.TextChoices):
-        OWNER = 'OWNER', 'Shop Owner / Admin'
-        STAFF = 'STAFF', 'Shop Staff'
+        KEP_ADMIN = 'KEP_ADMIN', 'KEP Platform Administrator'
+        OWNER = 'OWNER', 'Shop / Institution Administrator'
+        STAFF = 'STAFF', 'Shop Operator / Staff'
         CUSTOMER = 'CUSTOMER', 'Customer'
 
     role = models.CharField(
@@ -2128,8 +3023,11 @@ class User(AbstractUser):
     )
     phone_number = models.CharField(max_length=20, blank=True, null=True)
 
+    def is_kep_admin(self):
+        return self.role == self.Role.KEP_ADMIN or self.is_superuser
+
     def is_owner(self):
-        return self.role == self.Role.OWNER
+        return self.role == self.Role.OWNER or self.role == self.Role.KEP_ADMIN or self.is_superuser
 
     def is_staff_member(self):
         return self.role == self.Role.STAFF
@@ -2147,8 +3045,28 @@ class Shop(models.Model):
     email = models.EmailField()
     address = models.TextField()
 
-    # Operations status
+    # Shop vs Educational/Corporate Institution
+    is_institution = models.BooleanField(default=False, help_text="Shop or educational/corporate institution")
+    institution_type = models.CharField(max_length=50, blank=True, default="Commercial Xerox Shop")
+
+    # Subscription / Plan Tier
+    class PlanTier(models.TextChoices):
+        TRIAL = 'TRIAL', 'Trial Plan'
+        STARTER = 'STARTER', 'Starter Plan'
+        PRO = 'PRO', 'Pro Business Plan'
+        ENTERPRISE = 'ENTERPRISE', 'Institutional Enterprise'
+
+    plan_tier = models.CharField(max_length=20, choices=PlanTier.choices, default=PlanTier.TRIAL)
+    plan_active = models.BooleanField(default=True)
+
+    # Operations & Setup Readiness
     is_accepting_orders = models.BooleanField(default=True)
+    is_checkout_enabled = models.BooleanField(
+        default=True,
+        help_text="The QR is available during setup, but checkout stays disabled until shop is ready."
+    )
+    test_order_completed = models.BooleanField(default=False, help_text="Confirmed physical test printout")
+    setup_step_completed = models.PositiveSmallIntegerField(default=8)
     pause_message = models.CharField(
         max_length=255,
         default="This shop is temporarily paused and not accepting new print orders at the moment."
@@ -3569,6 +4487,78 @@ class Migration(migrations.Migration):
 
 ---
 
+## File: `orders/migrations/0002_pricingrule_lamination_rate_and_more.py`
+
+```python
+# Generated by Django 6.1.3 on 2026-11-11 10:30
+
+from decimal import Decimal
+from django.db import migrations, models
+
+
+class Migration(migrations.Migration):
+
+    dependencies = [
+        ('orders', '0001_initial'),
+    ]
+
+    operations = [
+        migrations.AddField(
+            model_name='pricingrule',
+            name='lamination_rate',
+            field=models.DecimalField(decimal_places=2, default=Decimal('20.00'), max_digits=6),
+        ),
+        migrations.AddField(
+            model_name='pricingrule',
+            name='spiral_binding_rate',
+            field=models.DecimalField(decimal_places=2, default=Decimal('30.00'), max_digits=6),
+        ),
+        migrations.AddField(
+            model_name='pricingrule',
+            name='stapling_rate',
+            field=models.DecimalField(decimal_places=2, default=Decimal('2.00'), max_digits=6),
+        ),
+        migrations.AddField(
+            model_name='pricingrule',
+            name='supports_lamination',
+            field=models.BooleanField(default=True),
+        ),
+        migrations.AddField(
+            model_name='pricingrule',
+            name='supports_spiral_binding',
+            field=models.BooleanField(default=True),
+        ),
+        migrations.AddField(
+            model_name='pricingrule',
+            name='supports_stapling',
+            field=models.BooleanField(default=True),
+        ),
+        migrations.AddField(
+            model_name='printpreference',
+            name='finishing_service',
+            field=models.CharField(choices=[('NONE', 'No Finishing'), ('CORNER_STAPLE', 'Corner Stapling'), ('SPIRAL_BINDING', 'Spiral Book Binding'), ('LAMINATION', 'Protective Lamination')], default='NONE', max_length=25),
+        ),
+        migrations.AddField(
+            model_name='printpreference',
+            name='prepared_with_getfilepilot',
+            field=models.BooleanField(default=False, help_text='Prepared via GetFilePilot tools'),
+        ),
+        migrations.AddField(
+            model_name='printpreference',
+            name='rotation_angle',
+            field=models.PositiveIntegerField(default=0, help_text='0, 90, 180, 270'),
+        ),
+        migrations.AlterField(
+            model_name='printorder',
+            name='status',
+            field=models.CharField(choices=[('UPLOADED', 'Uploaded'), ('AWAITING_PAYMENT', 'Awaiting Payment'), ('PAYMENT_VERIFIED', 'Payment Verified'), ('QUEUED', 'Queued for Printer'), ('ASSIGNED', 'Assigned to Printer'), ('SENT_TO_PRINTER', 'Sent to Printer'), ('PRINTING', 'Printing in Progress'), ('PRINTED', 'Printed (Finishing Pending)'), ('FINISHING_IN_PROGRESS', 'Finishing in Progress'), ('READY_FOR_PICKUP', 'Ready for Customer Pickup'), ('COMPLETED', 'Handed Over & Completed'), ('FAILED', 'Print Failed'), ('CANCELLED', 'Cancelled'), ('REFUND_PENDING', 'Refund Pending'), ('REFUNDED', 'Refunded')], db_index=True, default='UPLOADED', max_length=30),
+        ),
+    ]
+
+```
+
+---
+
 ## File: `orders/migrations/__init__.py`
 
 ```python
@@ -3628,6 +4618,12 @@ class PrintPreference(models.Model):
         ALL = 'ALL', 'All Pages'
         CUSTOM = 'CUSTOM', 'Custom Range'
 
+    class FinishingService(models.TextChoices):
+        NONE = 'NONE', 'No Finishing'
+        CORNER_STAPLE = 'CORNER_STAPLE', 'Corner Stapling'
+        SPIRAL_BINDING = 'SPIRAL_BINDING', 'Spiral Book Binding'
+        LAMINATION = 'LAMINATION', 'Protective Lamination'
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     color_mode = models.CharField(max_length=10, choices=ColorMode.choices, default=ColorMode.BW)
     duplex_mode = models.CharField(max_length=10, choices=DuplexMode.choices, default=DuplexMode.SINGLE)
@@ -3635,11 +4631,14 @@ class PrintPreference(models.Model):
     copies = models.PositiveIntegerField(default=1)
     page_range_type = models.CharField(max_length=10, choices=PageRangeType.choices, default=PageRangeType.ALL)
     page_range_selection = models.CharField(max_length=255, blank=True, default="", help_text="e.g. 1-5, 8, 11-14")
+    finishing_service = models.CharField(max_length=25, choices=FinishingService.choices, default=FinishingService.NONE)
+    prepared_with_getfilepilot = models.BooleanField(default=False, help_text="Prepared via GetFilePilot tools")
+    rotation_angle = models.PositiveIntegerField(default=0, help_text="0, 90, 180, 270")
     total_calculated_pages = models.PositiveIntegerField(default=1)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return f"{self.color_mode} | {self.duplex_mode} | {self.paper_size} x {self.copies}"
+        return f"{self.color_mode} | {self.duplex_mode} | {self.paper_size} x {self.copies} [{self.finishing_service}]"
 
 
 class PricingRule(models.Model):
@@ -3651,6 +4650,15 @@ class PricingRule(models.Model):
     color_double_rate = models.DecimalField(max_digits=6, decimal_places=2, default=Decimal('18.00'))
     a3_bw_rate = models.DecimalField(max_digits=6, decimal_places=2, default=Decimal('5.00'))
     a3_color_rate = models.DecimalField(max_digits=6, decimal_places=2, default=Decimal('20.00'))
+
+    # Finishing Services (Stapling, Spiral Binding, Lamination)
+    supports_stapling = models.BooleanField(default=True)
+    stapling_rate = models.DecimalField(max_digits=6, decimal_places=2, default=Decimal('2.00'))
+    supports_spiral_binding = models.BooleanField(default=True)
+    spiral_binding_rate = models.DecimalField(max_digits=6, decimal_places=2, default=Decimal('30.00'))
+    supports_lamination = models.BooleanField(default=True)
+    lamination_rate = models.DecimalField(max_digits=6, decimal_places=2, default=Decimal('20.00'))
+
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -3665,6 +4673,7 @@ class PricingRule(models.Model):
         color = preference.color_mode
         duplex = preference.duplex_mode
         paper = preference.paper_size
+        finishing = getattr(preference, 'finishing_service', 'NONE')
 
         if paper == 'A3':
             unit_rate = self.a3_color_rate if color == 'COLOR' else self.a3_bw_rate
@@ -3691,8 +4700,22 @@ class PricingRule(models.Model):
                     unit_rate = self.bw_single_rate
                     rate_label = "B&W Single-Sided (per page)"
 
-        subtotal = unit_rate * sheets * copies
-        total_amount = round(subtotal, 2)
+        printing_subtotal = unit_rate * sheets * copies
+
+        # Finishing services cost
+        finishing_cost = Decimal('0.00')
+        finishing_label = "None"
+        if finishing == 'CORNER_STAPLE' and self.supports_stapling:
+            finishing_cost = self.stapling_rate * copies
+            finishing_label = f"Corner Stapling (₹{self.stapling_rate}/copy)"
+        elif finishing == 'SPIRAL_BINDING' and self.supports_spiral_binding:
+            finishing_cost = self.spiral_binding_rate * copies
+            finishing_label = f"Spiral Book Binding (₹{self.spiral_binding_rate}/copy)"
+        elif finishing == 'LAMINATION' and self.supports_lamination:
+            finishing_cost = self.lamination_rate * copies
+            finishing_label = f"Front/Back Lamination (₹{self.lamination_rate}/copy)"
+
+        total_amount = round(printing_subtotal + finishing_cost, 2)
 
         return {
             'unit_rate': float(unit_rate),
@@ -3701,6 +4724,10 @@ class PricingRule(models.Model):
             'pages_per_copy': pages_to_print,
             'copies': copies,
             'total_sheets': sheets * copies,
+            'printing_subtotal': float(printing_subtotal),
+            'finishing_service': finishing,
+            'finishing_label': finishing_label,
+            'finishing_cost': float(finishing_cost),
             'total_amount': float(total_amount),
             'currency': 'INR',
         }
@@ -3711,11 +4738,14 @@ class PrintOrder(models.Model):
         UPLOADED = 'UPLOADED', 'Uploaded'
         AWAITING_PAYMENT = 'AWAITING_PAYMENT', 'Awaiting Payment'
         PAYMENT_VERIFIED = 'PAYMENT_VERIFIED', 'Payment Verified'
-        QUEUED = 'QUEUED', 'Queued'
+        QUEUED = 'QUEUED', 'Queued for Printer'
         ASSIGNED = 'ASSIGNED', 'Assigned to Printer'
         SENT_TO_PRINTER = 'SENT_TO_PRINTER', 'Sent to Printer'
         PRINTING = 'PRINTING', 'Printing in Progress'
-        COMPLETED = 'COMPLETED', 'Completed & Ready for Pickup'
+        PRINTED = 'PRINTED', 'Printed (Finishing Pending)'
+        FINISHING_IN_PROGRESS = 'FINISHING_IN_PROGRESS', 'Finishing in Progress'
+        READY_FOR_PICKUP = 'READY_FOR_PICKUP', 'Ready for Customer Pickup'
+        COMPLETED = 'COMPLETED', 'Handed Over & Completed'
         FAILED = 'FAILED', 'Print Failed'
         CANCELLED = 'CANCELLED', 'Cancelled'
         REFUND_PENDING = 'REFUND_PENDING', 'Refund Pending'

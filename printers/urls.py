@@ -6,7 +6,14 @@ app_name = 'printers'
 
 urlpatterns = [
     # Dashboard views
+    path('', views.printer_list, name='printer_list_root'),
     path('list/', views.printer_list, name='printer_list'),
+    path('add/', views.printer_create, name='printer_add'),
+    path('register-detected/', views.printer_register_detected, name='printer_register_detected'),
+    path('test-print/<uuid:printer_id>/', views.printer_test_print, name='printer_test_print'),
+    path('assign-qr/<uuid:printer_id>/', views.printer_assign_to_qr, name='printer_assign_to_qr'),
+    path('edit/<uuid:printer_id>/', views.printer_edit, name='printer_edit'),
+    path('delete/<uuid:printer_id>/', views.printer_delete, name='printer_delete'),
     path('toggle/<uuid:printer_id>/', views.printer_toggle_active, name='printer_toggle_active'),
     path('set-default/<uuid:printer_id>/', views.printer_set_default, name='printer_set_default'),
     path('assignments/', views.printer_assignments_view, name='printer_assignments'),

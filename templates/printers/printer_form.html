@@ -1,0 +1,172 @@
+{% extends 'base.html' %}
+
+{% block title %}{% if is_create %}Add New Printer{% else %}Edit {{ printer.name }}{% endif %} - {{ shop.name }}{% endblock %}
+
+{% block content %}
+<div class="dashboard-container">
+    {% include 'components/dashboard_sidebar.html' %}
+
+    <div class="dashboard-main">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h4 class="fw-bold mb-1">
+                    {% if is_create %}<i class="bi bi-plus-circle text-primary me-2"></i>Add New Printer{% else %}<i class="bi bi-pencil-square text-primary me-2"></i>Edit Printer: {{ printer.name }}{% endif %}
+                </h4>
+                <div class="text-muted small">Configure print hardware specifications, spooler queue name, and paper handling capabilities.</div>
+            </div>
+            <div>
+                <a href="{% url 'printers:printer_list' %}" class="btn btn-outline-secondary btn-sm">
+                    <i class="bi bi-arrow-left me-1"></i> Back to Printer List
+                </a>
+            </div>
+        </div>
+
+        {% if is_create %}
+        <!-- Quick Preset Banner for HP Smart Tank 530 -->
+        <div class="alert alert-primary border-0 shadow-sm rounded-4 p-3 mb-4 d-flex align-items-center justify-content-between flex-wrap gap-2">
+            <div class="d-flex align-items-center gap-3">
+                <div class="p-2 bg-white text-primary rounded-3 fs-3">
+                    <i class="bi bi-printer-fill"></i>
+                </div>
+                <div>
+                    <strong class="d-block text-dark">Quick Setup: HP Smart Tank 530 (Product No: 4SB24A)</strong>
+                    <span class="text-muted small">Auto-populate all factory specifications (B&W, Colour Ink Tank, Duplex, 1200 DPI, A4/Letter).</span>
+                </div>
+            </div>
+            <a href="?preset=hp_smart_tank_530" class="btn btn-primary fw-bold btn-sm px-3 shadow-sm">
+                <i class="bi bi-magic me-1"></i> Load HP 530 Preset
+            </a>
+        </div>
+        {% endif %}
+
+        <div class="card border-0 shadow-sm rounded-4 bg-white p-4">
+            <form method="post">
+                {% csrf_token %}
+
+                <div class="row g-4">
+                    <!-- General Information -->
+                    <div class="col-12">
+                        <h6 class="fw-bold text-dark border-bottom pb-2 mb-3">1. Printer Identification</h6>
+                    </div>
+
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold small text-muted">Friendly Display Name *</label>
+                        {{ form.name }}
+                        <div class="form-text small">e.g. <code>HP Smart Tank 530 (Counter 1)</code></div>
+                        {% if form.name.errors %}<div class="text-danger small mt-1">{{ form.name.errors }}</div>{% endif %}
+                    </div>
+
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold small text-muted">Model &amp; Product Number</label>
+                        {{ form.model_name }}
+                        <div class="form-text small">e.g. <code>HP Smart Tank 530 All-in-One (Product No: 4SB24A)</code></div>
+                        {% if form.model_name.errors %}<div class="text-danger small mt-1">{{ form.model_name.errors }}</div>{% endif %}
+                    </div>
+
+                    <div class="col-md-12">
+                        <label class="form-label fw-bold small text-muted">Windows Spooler Queue Name *</label>
+                        {{ form.system_printer_name }}
+                        <div class="form-text small">
+                            Exact Windows printer name as shown in Windows "Printers &amp; scanners" (e.g. <code>HP Smart Tank 530 series</code> or <code>HP_Smart_Tank_530</code>).
+                        </div>
+                        {% if form.system_printer_name.errors %}<div class="text-danger small mt-1">{{ form.system_printer_name.errors }}</div>{% endif %}
+                    </div>
+
+                    <!-- Capabilities -->
+                    <div class="col-12 mt-4">
+                        <h6 class="fw-bold text-dark border-bottom pb-2 mb-3">2. Print Capabilities &amp; Color Modes</h6>
+                    </div>
+
+                    <div class="col-md-6">
+                        <div class="card bg-light border-0 p-3 rounded-3 mb-3">
+                            <label class="form-label fw-bold small text-muted mb-2">Supported Color Formats</label>
+                            <div class="form-check form-switch mb-2">
+                                {{ form.handles_bw }}
+                                <label class="form-check-label fw-semibold" for="{{ form.handles_bw.id_for_label }}">
+                                    Handles Black &amp; White (Monochrome)
+                                </label>
+                            </div>
+                            <div class="form-check form-switch">
+                                {{ form.handles_color }}
+                                <label class="form-check-label fw-semibold" for="{{ form.handles_color.id_for_label }}">
+                                    Handles Full Colour Printing (Ink Tank / CMYK)
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="card bg-light border-0 p-3 rounded-3">
+                            <label class="form-label fw-bold small text-muted mb-2">Duplex (Sides) &amp; Resolution</label>
+                            <div class="form-check form-switch mb-3">
+                                {{ form.supports_duplex }}
+                                <label class="form-check-label fw-semibold" for="{{ form.supports_duplex.id_for_label }}">
+                                    Supports Double-Sided (Duplex) Printing
+                                </label>
+                            </div>
+                            <label class="form-label fw-bold small text-muted">Resolution (DPI):</label>
+                            {{ form.dpi }}
+                        </div>
+                    </div>
+
+                    <div class="col-md-6">
+                        <div class="card bg-light border-0 p-3 rounded-3 h-100">
+                            <label class="form-label fw-bold small text-muted mb-2">Supported Paper Sizes</label>
+                            <div class="d-flex flex-column gap-2">
+                                {% for choice in form.supported_paper_sizes %}
+                                    <div class="form-check">
+                                        {{ choice.tag }}
+                                        <label class="form-check-label small fw-semibold" for="{{ choice.id_for_label }}">
+                                            {{ choice.choice_label }}
+                                        </label>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Status & Flags -->
+                    <div class="col-12 mt-4">
+                        <h6 class="fw-bold text-dark border-bottom pb-2 mb-3">3. Operational Status &amp; Defaults</h6>
+                    </div>
+
+                    <div class="col-md-4">
+                        <div class="form-check form-switch">
+                            {{ form.is_active }}
+                            <label class="form-check-label fw-semibold" for="{{ form.is_active.id_for_label }}">
+                                Active (Receives Jobs)
+                            </label>
+                        </div>
+                        <div class="text-muted small">Enable or disable this printer in routing.</div>
+                    </div>
+
+                    <div class="col-md-4">
+                        <div class="form-check form-switch">
+                            {{ form.is_online }}
+                            <label class="form-check-label fw-semibold" for="{{ form.is_online.id_for_label }}">
+                                Mark as Online / Ready
+                            </label>
+                        </div>
+                        <div class="text-muted small">Will be verified by the local Windows connector.</div>
+                    </div>
+
+                    <div class="col-md-4">
+                        <div class="form-check form-switch">
+                            {{ form.is_default }}
+                            <label class="form-check-label fw-semibold" for="{{ form.is_default.id_for_label }}">
+                                Set as Shop Default Printer
+                            </label>
+                        </div>
+                        <div class="text-muted small">Used as default fallback for general jobs.</div>
+                    </div>
+                </div>
+
+                <div class="d-flex justify-content-end gap-2 mt-5 pt-3 border-top">
+                    <a href="{% url 'printers:printer_list' %}" class="btn btn-outline-secondary px-4">Cancel</a>
+                    <button type="submit" class="btn btn-primary px-4 fw-bold">
+                        <i class="bi bi-check2-circle me-1"></i> Save Printer Details
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

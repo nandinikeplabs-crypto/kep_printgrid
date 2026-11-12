@@ -1,0 +1,197 @@
+{% extends 'base.html' %}
+
+{% block title %}Scan Counter QR Code - KEP PrintGrid{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="row justify-content-center">
+        <div class="col-lg-6 col-md-8">
+            <div class="card border-0 shadow-lg rounded-4 overflow-hidden">
+                <!-- Header -->
+                <div class="card-header bg-dark text-white p-4 text-center border-0">
+                    <span class="badge bg-warning text-dark text-uppercase px-3 py-1 fw-bold mb-2">Live Camera Scanner</span>
+                    <h3 class="fw-bold mb-1"><i class="bi bi-qr-code-scan text-warning me-2"></i> Scan Shop QR Code</h3>
+                    <p class="text-light small mb-0">Point your phone or laptop camera at the shop counter QR stand to instantly open the document upload page.</p>
+                </div>
+
+                <div class="card-body p-4">
+                    <!-- Scanner Viewfinder Box -->
+                    <div class="position-relative mx-auto rounded-4 overflow-hidden shadow-sm" style="background: #111; min-height: 320px;">
+                        <div id="reader" style="width: 100%;"></div>
+                        <div id="scannerOverlay" class="position-absolute top-50 start-50 translate-middle text-center text-white" style="display: none; pointer-events: none;">
+                            <div class="spinner-border text-warning mb-2" role="status"></div>
+                            <div class="small fw-semibold">Redirecting to upload page...</div>
+                        </div>
+                    </div>
+
+                    <!-- Scanner Status / Controls -->
+                    <div id="scanStatus" class="alert alert-info d-flex align-items-center gap-2 mt-3 py-2 px-3 small border-0">
+                        <i class="bi bi-info-circle-fill fs-5"></i>
+                        <span id="scanStatusText">Camera initialized. Align the counter QR code inside the frame.</span>
+                    </div>
+
+                    <div class="d-flex justify-content-center gap-2 mb-4">
+                        <button id="btnSwitchCamera" class="btn btn-outline-secondary btn-sm" onclick="switchCamera()">
+                            <i class="bi bi-arrow-repeat me-1"></i> Flip Camera
+                        </button>
+                        <button id="btnRestartScan" class="btn btn-outline-dark btn-sm" onclick="restartScanner()">
+                            <i class="bi bi-play-circle me-1"></i> Restart Scanner
+                        </button>
+                    </div>
+
+                    <!-- Scan from File Fallback -->
+                    <div class="p-3 bg-light rounded-3 mb-4">
+                        <label class="form-label small fw-bold text-muted mb-2">
+                            <i class="bi bi-image text-primary me-1"></i> Or Scan from Photo / Screenshot:
+                        </label>
+                        <input type="file" id="qrFileInput" class="form-control form-control-sm" accept="image/*">
+                    </div>
+
+                    <!-- Manual Shop Code Fallback -->
+                    <form onsubmit="event.preventDefault(); goToShop();" class="mb-2">
+                        <label class="form-label small fw-bold text-muted mb-1">
+                            <i class="bi bi-keyboard text-secondary me-1"></i> Don't have a camera? Enter Shop ID:
+                        </label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-light fw-bold text-muted">#</span>
+                            <input type="text" id="manualShopInput" class="form-control text-uppercase" placeholder="e.g. KEP10001" value="KEP10001">
+                            <button type="submit" class="btn btn-dark fw-semibold px-3">
+                                Go to Shop <i class="bi bi-arrow-right"></i>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Footer with quick links -->
+                <div class="card-footer bg-light p-3 text-center border-0">
+                    <span class="text-muted small">Need to test right away? </span>
+                    <a href="/shop/KEP10001/" class="text-decoration-none fw-bold text-primary small">
+                        Open Demo Shop KEP10001 Directly &rarr;
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<!-- HTML5 QR Code Scanner Library -->
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script>
+    let html5QrCode = null;
+    let currentFacingMode = "environment"; // default to rear camera
+
+    function updateStatus(text, type = 'info') {
+        const statusBox = document.getElementById('scanStatus');
+        const statusText = document.getElementById('scanStatusText');
+        statusBox.className = `alert alert-${type} d-flex align-items-center gap-2 mt-3 py-2 px-3 small border-0`;
+        statusText.innerHTML = text;
+    }
+
+    function onScanSuccess(decodedText, decodedResult) {
+        console.log("QR Code scanned:", decodedText);
+        updateStatus("<strong>QR Code recognized!</strong> Redirecting to your shop document upload...", "success");
+        document.getElementById('scannerOverlay').style.display = 'block';
+
+        if (html5QrCode) {
+            html5QrCode.stop().then(() => {
+                redirectScannedTarget(decodedText);
+            }).catch(() => {
+                redirectScannedTarget(decodedText);
+            });
+        } else {
+            redirectScannedTarget(decodedText);
+        }
+    }
+
+    function redirectScannedTarget(text) {
+        text = (text || '').trim();
+        // If it's a full URL
+        if (text.startsWith("http://") || text.startsWith("https://")) {
+            window.location.href = text;
+            return;
+        }
+        // If it's a relative path like /shop/KEP10001/
+        if (text.startsWith("/shop/")) {
+            window.location.href = text;
+            return;
+        }
+        // If it's just a shop code or slug (e.g. KEP10001 or metro-xerox)
+        window.location.href = "/shop/" + encodeURIComponent(text) + "/";
+    }
+
+    function startScanner() {
+        html5QrCode = new Html5Qrcode("reader");
+        const config = {
+            fps: 15,
+            qrbox: { width: 250, height: 250 },
+            aspectRatio: 1.0
+        };
+
+        html5QrCode.start(
+            { facingMode: currentFacingMode },
+            config,
+            onScanSuccess,
+            (errorMessage) => {
+                // Ignore transient frame scan errors
+            }
+        ).then(() => {
+            updateStatus("<i class='bi bi-broadcast text-success me-1'></i> Camera active. Align the counter QR code inside the frame.", "info");
+        }).catch(err => {
+            console.error("Camera start error:", err);
+            updateStatus("<i class='bi bi-exclamation-triangle-fill text-danger me-1'></i> Camera permission denied or no camera detected. You can upload a photo of the QR code below or enter the Shop ID manually.", "warning");
+        });
+    }
+
+    function switchCamera() {
+        if (!html5QrCode) return;
+        currentFacingMode = currentFacingMode === "environment" ? "user" : "environment";
+        html5QrCode.stop().then(() => {
+            startScanner();
+        }).catch(err => {
+            startScanner();
+        });
+    }
+
+    function restartScanner() {
+        if (html5QrCode) {
+            html5QrCode.stop().then(() => {
+                startScanner();
+            }).catch(() => {
+                startScanner();
+            });
+        } else {
+            startScanner();
+        }
+    }
+
+    function goToShop() {
+        const id = document.getElementById('manualShopInput').value.trim();
+        if (id) {
+            window.location.href = '/shop/' + encodeURIComponent(id) + '/';
+        }
+    }
+
+    // Handle file upload fallback
+    document.getElementById('qrFileInput').addEventListener('change', e => {
+        if (e.target.files.length === 0) return;
+        const imageFile = e.target.files[0];
+        
+        const fileScanner = new Html5Qrcode("reader");
+        updateStatus("Scanning uploaded image...", "info");
+        fileScanner.scanFile(imageFile, true)
+            .then(decodedText => {
+                onScanSuccess(decodedText);
+            })
+            .catch(err => {
+                updateStatus("No valid QR code found in uploaded image. Please try a clearer picture.", "danger");
+            });
+    });
+
+    // Start scanner on load
+    window.addEventListener('DOMContentLoaded', () => {
+        startScanner();
+    });
+</script>
+{% endblock %}

@@ -24,10 +24,10 @@ class PermanentQRCodeAndShopTests(TestCase):
         self.qr_code_obj = generate_shop_qr_code(self.shop)
 
     def test_qr_code_generation_and_association(self):
-        """Verify QR code is generated, permanently linked to shop slug, and stored."""
+        """Verify QR code is generated, permanently linked to shop unique ID or slug, and stored."""
         self.assertIsNotNone(self.qr_code_obj)
         self.assertEqual(self.qr_code_obj.shop, self.shop)
-        self.assertTrue(self.shop.slug in self.qr_code_obj.qr_target_url)
+        self.assertTrue(self.shop.shop_code in self.qr_code_obj.qr_target_url or self.shop.slug in self.qr_code_obj.qr_target_url)
 
     def test_customer_scanning_qr_url_reaches_shop_ordering_page(self):
         """Customer accessing the QR destination reaches the correct shop ordering page."""

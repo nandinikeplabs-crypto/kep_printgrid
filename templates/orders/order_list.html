@@ -88,9 +88,13 @@
                                 </td>
                                 <td class="text-muted small">{{ order.created_at|date:"d M, H:i" }}</td>
                                 <td>
-                                    <a href="{% url 'orders:order_detail' order_number=order.order_number %}" class="btn btn-outline-dark btn-sm py-0 px-2">
-                                        Details
-                                    </a>
+                                    {% if order.order_number %}
+                                        <a href="{% url 'orders:order_detail' order_number=order.order_number %}" class="btn btn-outline-dark btn-sm py-0 px-2">
+                                            Details
+                                        </a>
+                                    {% else %}
+                                        <span class="text-muted small">-</span>
+                                    {% endif %}
                                 </td>
                             </tr>
                         {% empty %}

@@ -1,23 +1,28 @@
 {% extends 'base.html' %}
 
-{% block title %}Permanent Shop QR Code - {{ shop.name }}{% endblock %}
+{% block title %}Permanent Shop QR Code &amp; Printer Mapping - {{ shop.name }}{% endblock %}
 
 {% block content %}
 <div class="dashboard-container">
     {% include 'components/dashboard_sidebar.html' %}
 
     <div class="dashboard-main">
-        <div class="d-flex justify-content-between align-items-center mb-4">
+        <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
             <div>
-                <h4 class="fw-bold mb-1">Permanent Shop QR Code</h4>
-                <div class="text-muted small">This QR code is permanently assigned to <strong>{{ shop.name }}</strong>. Print and place it at your counter.</div>
+                <h4 class="fw-bold mb-1">Permanent Shop QR Code &amp; Printer Mapping</h4>
+                <div class="text-muted small">This QR code is permanently assigned to <strong>{{ shop.name }}</strong>. All scanned orders print on its assigned physical printer.</div>
             </div>
-            <form method="post">
-                {% csrf_token %}
-                <button type="submit" name="regenerate" class="btn btn-outline-secondary btn-sm">
-                    <i class="bi bi-arrow-clockwise me-1"></i> Re-Render Assets
-                </button>
-            </form>
+            <div class="d-flex gap-2">
+                <form method="post" class="d-inline">
+                    {% csrf_token %}
+                    <button type="submit" name="regenerate" class="btn btn-outline-secondary btn-sm">
+                        <i class="bi bi-arrow-clockwise me-1"></i> Re-Render Assets
+                    </button>
+                </form>
+                <a href="{% url 'printers:printer_list' %}" class="btn btn-primary btn-sm fw-bold">
+                    <i class="bi bi-printer me-1"></i> Manage Printers
+                </a>
+            </div>
         </div>
 
         <div class="row g-4">
@@ -33,7 +38,39 @@
                     <h5 class="fw-bold mb-1">{{ shop.name }}</h5>
                     <p class="text-muted small mb-3">{{ shop.address }}</p>
 
+                    <!-- Assigned Physical Printer Pill -->
+                    <div class="card bg-light border-0 rounded-3 p-3 mb-3 text-start">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <span class="text-muted small text-uppercase fw-semibold" style="font-size:0.7rem;">Mapped Physical Printer</span>
+                            {% if assigned_printer %}
+                                <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-0" style="font-size:0.7rem;">
+                                    <i class="bi bi-circle-fill me-1" style="font-size:0.4rem;"></i> {{ assigned_printer.detailed_status }}
+                                </span>
+                            {% else %}
+                                <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle px-2 py-0" style="font-size:0.7rem;">
+                                    Not Assigned
+                                </span>
+                            {% endif %}
+                        </div>
+                        <div class="fw-bold text-dark fs-6">
+                            {% if assigned_printer %}
+                                <i class="bi bi-printer text-primary me-1"></i> {{ assigned_printer.name }}
+                                <span class="badge bg-secondary font-monospace ms-1" style="font-size:0.7rem;">{{ assigned_printer.printer_code }}</span>
+                            {% else %}
+                                <span class="text-muted">No printer assigned</span>
+                            {% endif %}
+                        </div>
+                        <div class="text-muted small font-monospace mt-1" style="font-size:0.75rem;">
+                            Queue: {{ assigned_printer.system_printer_name|default:"Not configured" }}
+                        </div>
+                    </div>
+
                     <div class="d-grid gap-2">
+                        {% if assigned_printer %}
+                            <a href="{% url 'printers:printer_test_print' printer_id=assigned_printer.id %}" class="btn btn-success fw-bold">
+                                <i class="bi bi-printer me-2"></i> Test Print to Assigned Printer
+                            </a>
+                        {% endif %}
                         <a href="{% url 'core:download_qr_asset' asset_type='pdf' %}" class="btn btn-primary">
                             <i class="bi bi-file-earmark-pdf me-2"></i> Download Printable A4 Poster (PDF)
                         </a>
@@ -44,36 +81,67 @@
                 </div>
             </div>
 
-            <!-- Rules & Guidance Card -->
+            <!-- Mapping & Configuration Card -->
             <div class="col-md-7">
+                <!-- Assign Physical Printer to this QR Code Form -->
                 <div class="card border-0 shadow-sm rounded-4 p-4 bg-white mb-4">
-                    <h6 class="fw-bold mb-3"><i class="bi bi-shield-check text-success me-2"></i>Permanent QR Invariant Rules</h6>
+                    <h6 class="fw-bold mb-2 text-dark"><i class="bi bi-link-45deg text-primary me-2"></i>QR Code Physical Printer Assignment</h6>
+                    <p class="text-muted small mb-3">Select the physical printer on your counter that should automatically print orders placed through this QR code:</p>
+
+                    <form method="post">
+                        {% csrf_token %}
+                        <div class="mb-3">
+                            <label class="form-label small fw-semibold text-dark">Target Shop Printer</label>
+                            <select name="assigned_printer_id" class="form-select" required>
+                                {% for p in shop_printers %}
+                                    <option value="{{ p.id }}" {% if assigned_printer and assigned_printer.id == p.id %}selected{% endif %}>
+                                        {{ p.name }} [{{ p.printer_code }}] — {{ p.system_printer_name }} ({{ p.detailed_status }})
+                                        {% if p.is_default %} [Shop Default]{% endif %}
+                                    </option>
+                                {% empty %}
+                                    <option value="">No printers registered yet. Register a printer first.</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center">
+                            <button type="submit" name="assign_printer" class="btn btn-primary fw-bold px-4" {% if not shop_printers %}disabled{% endif %}>
+                                <i class="bi bi-check2-circle me-1"></i> Save QR Code Mapping
+                            </button>
+                            <a href="{% url 'printers:printer_list' %}" class="text-decoration-none small text-primary fw-semibold">
+                                <i class="bi bi-plus-circle me-1"></i> Add / Detect New Printer
+                            </a>
+                        </div>
+                    </form>
+                </div>
+
+                <div class="card border-0 shadow-sm rounded-4 p-4 bg-white mb-4">
+                    <h6 class="fw-bold mb-3"><i class="bi bi-shield-check text-success me-2"></i>QR Code &amp; Hardware Mapping Guarantees</h6>
                     <ul class="list-group list-group-flush small">
                         <li class="list-group-item px-0 py-2 d-flex gap-2">
                             <i class="bi bi-check-circle-fill text-success"></i>
-                            <div><strong>Never changes:</strong> Changing, replacing, or servicing physical printers will <em>never</em> invalidate this QR code.</div>
+                            <div><strong>Persistent Association:</strong> This QR code is permanently mapped to your chosen physical printer in the database.</div>
                         </li>
                         <li class="list-group-item px-0 py-2 d-flex gap-2">
                             <i class="bi bi-check-circle-fill text-success"></i>
-                            <div><strong>Intelligent Routing:</strong> Customers scan this single code, and PrintGrid routes jobs to your active online printers automatically.</div>
+                            <div><strong>Multi-Shop Isolation:</strong> Orders from this shop's QR code <em>only</em> route to this shop's printer. Cross-shop printing is strictly impossible.</div>
                         </li>
                         <li class="list-group-item px-0 py-2 d-flex gap-2">
                             <i class="bi bi-check-circle-fill text-success"></i>
-                            <div><strong>Temporary Pausing:</strong> If your shop is busy, simply toggle "Pause Ordering" in Settings without changing or reprinting this code.</div>
+                            <div><strong>Automatic Spooling:</strong> Once the customer completes payment, the document is decrypted and spooled directly to the assigned printer.</div>
                         </li>
                     </ul>
                 </div>
 
                 <div class="card border-0 shadow-sm rounded-4 p-4 bg-white">
-                    <h6 class="fw-bold mb-2">Permanent Customer Ordering URL</h6>
+                    <h6 class="fw-bold mb-2">Customer Ordering URL</h6>
                     <p class="text-muted small">Customers scanning the QR code are directed to:</p>
                     <div class="input-group mb-3">
-                        <input type="text" class="form-control bg-light" value="{{ shop.order_page_url }}" readonly id="shopUrlInput">
-                        <button class="btn btn-outline-secondary" type="button" onclick="navigator.clipboard.writeText(document.getElementById('shopUrlInput').value); alert('Copied shop URL to clipboard!');">
-                            <i class="bi bi-clipboard"></i> Copy
+                        <input type="text" class="form-control bg-light font-monospace small" value="{{ shop.order_page_url }}" readonly id="shopUrlInput">
+                        <button class="btn btn-outline-secondary" type="button" onclick="navigator.clipboard.writeText(document.getElementById('shopUrlInput').value); alert('Copied mobile QR link to clipboard!');">
+                            <i class="bi bi-clipboard"></i> Copy Link
                         </button>
-                        <a href="{{ shop.order_page_url }}" target="_blank" class="btn btn-outline-primary">
-                            <i class="bi bi-box-arrow-up-right"></i> Open
+                        <a href="/shop/{{ shop.shop_code|default:shop.slug }}/" target="_blank" class="btn btn-primary fw-bold">
+                            <i class="bi bi-box-arrow-up-right me-1"></i> Preview Ordering Page
                         </a>
                     </div>
                 </div>

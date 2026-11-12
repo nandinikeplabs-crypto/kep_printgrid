@@ -37,7 +37,7 @@ class WindowsSpooler(BaseSpooler):
                     is_default = (name == default_name)
 
                     # Inspect basic capabilities
-                    is_color = "color" in name.lower() or "cmyk" in name.lower()
+                    is_color = any(k in name.lower() for k in ["color", "cmyk", "tank", "deskjet", "inkjet", "photosmart", "officejet", "epson l", "canon g", "smart tank"])
                     supports_a3 = "a3" in name.lower() or "wide" in name.lower()
                     paper_sizes = ['A4']
                     if supports_a3:
@@ -76,7 +76,7 @@ class WindowsSpooler(BaseSpooler):
                     name = item.get('Name', '')
                     if not name:
                         continue
-                    is_color = "color" in name.lower()
+                    is_color = any(k in name.lower() for k in ["color", "cmyk", "tank", "deskjet", "inkjet", "photosmart", "officejet", "epson l", "canon g", "smart tank"])
                     is_a3 = "a3" in name.lower()
                     paper_sizes = ['A4']
                     if is_a3:
@@ -119,14 +119,50 @@ class WindowsSpooler(BaseSpooler):
             })
         return printers
 
+    def _resolve_real_printer_name(self, requested_name: str) -> str:
+        """Finds the best matching installed printer name on Windows."""
+        try:
+            installed = self.get_installed_printers()
+            if not installed:
+                return requested_name
+
+            # 1. Exact match
+            for p in installed:
+                if p['system_name'].lower() == requested_name.lower():
+                    return p['system_name']
+
+            # 2. Substring match (e.g. 'HP Smart Tank 530' matches 'HP Smart Tank 530 series')
+            for p in installed:
+                if requested_name.lower() in p['system_name'].lower() or p['system_name'].lower() in requested_name.lower():
+                    return p['system_name']
+
+            # 3. Keyword match (e.g. '530' or 'smart tank')
+            keywords = [w for w in requested_name.lower().split() if len(w) > 2]
+            for p in installed:
+                if any(k in p['system_name'].lower() for k in keywords):
+                    return p['system_name']
+
+            # 4. Fallback to default printer
+            for p in installed:
+                if p.get('is_default'):
+                    return p['system_name']
+
+            return installed[0]['system_name']
+        except Exception:
+            return requested_name
+
     def submit_print_job(self, printer_name: str, pdf_path: str, preferences: dict) -> dict:
         if not os.path.exists(pdf_path):
             return {'success': False, 'os_job_id': '', 'message': f"PDF path does not exist: {pdf_path}"}
 
+        # Resolve real system printer name
+        actual_printer = self._resolve_real_printer_name(printer_name)
+        logger.info(f"Resolved printer '{printer_name}' -> system printer '{actual_printer}'")
+
         # Check if native win32print raw spool submission is applicable
         if self.has_win32print:
             try:
-                h_printer = self.win32print.OpenPrinter(printer_name)
+                h_printer = self.win32print.OpenPrinter(actual_printer)
                 job_id = self.win32print.StartDocPrinter(h_printer, 1, (f"KEP_PrintGrid_{os.path.basename(pdf_path)}", None, "RAW"))
                 self.win32print.StartPagePrinter(h_printer)
                 with open(pdf_path, 'rb') as f:
@@ -137,7 +173,7 @@ class WindowsSpooler(BaseSpooler):
                 return {
                     'success': True,
                     'os_job_id': str(job_id),
-                    'message': f"Submitted to Windows spooler printer '{printer_name}'"
+                    'message': f"Submitted to Windows spooler printer '{actual_printer}'"
                 }
             except Exception as e:
                 logger.warning(f"win32print direct spool failed ({e}), falling back to Windows PrintTo verb.")
@@ -145,14 +181,14 @@ class WindowsSpooler(BaseSpooler):
         # Fallback via PowerShell Start-Process PrintTo
         try:
             escaped_pdf = pdf_path.replace("'", "''")
-            escaped_printer = printer_name.replace("'", "''")
+            escaped_printer = actual_printer.replace("'", "''")
             cmd = f"Start-Process -FilePath '{escaped_pdf}' -Verb PrintTo -ArgumentList '\"{escaped_printer}\"' -PassThru"
             res = subprocess.run(["powershell", "-NoProfile", "-Command", cmd], capture_output=True, text=True, timeout=15)
             if res.returncode == 0:
                 return {
                     'success': True,
                     'os_job_id': f"PS_{os.path.basename(pdf_path)}",
-                    'message': f"Dispatched via Windows shell PrintTo to '{printer_name}'"
+                    'message': f"Dispatched via Windows shell PrintTo to '{actual_printer}'"
                 }
             else:
                 return {

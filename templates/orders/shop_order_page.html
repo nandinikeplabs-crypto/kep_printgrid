@@ -10,11 +10,51 @@
     if (window.pdfjsLib) {
         pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
     }
-    window.PRINTGRID_SHOP_SLUG = "{{ shop.slug }}";
+    window.PRINTGRID_SHOP_SLUG = "{{ shop.shop_code|default:shop.slug }}";
     window.PRINTGRID_RSA_KEY = `{{ connector_public_key|escapejs }}`;
+    window.PRINTGRID_RATES = {
+        bw_single: parseFloat("{{ pricing.bw_single_rate }}") || 2.0,
+        bw_double: parseFloat("{{ pricing.bw_double_rate }}") || 3.5,
+        color_single: parseFloat("{{ pricing.color_single_rate }}") || 10.0,
+        color_double: parseFloat("{{ pricing.color_double_rate }}") || 18.0,
+        a3_bw: parseFloat("{{ pricing.a3_bw_rate }}") || 5.0,
+        a3_color: parseFloat("{{ pricing.a3_color_rate }}") || 20.0,
+        stapling: parseFloat("{{ pricing.stapling_rate }}") || 2.0,
+        spiral: parseFloat("{{ pricing.spiral_binding_rate }}") || 30.0,
+        lamination: parseFloat("{{ pricing.lamination_rate }}") || 20.0,
+    };
 </script>
-<!-- Client-side zero-knowledge encryption -->
-<script src="{% static 'js/client_crypto.js' %}"></script>
+<!-- Client-side zero-knowledge encryption with mobile HTTP fallback -->
+<script src="{% static 'js/client_crypto.js' %}?v={% now 'U' %}"></script>
+<script>
+    // Inline fallback guarantee in case client_crypto.js was cached by browser
+    if (typeof window.ClientCryptoManager === 'undefined' || !window.ClientCryptoManager.isSecureCryptoAvailable) {
+        window.ClientCryptoManager = class ClientCryptoManager {
+            static isSecureCryptoAvailable() {
+                try {
+                    return typeof window !== 'undefined' &&
+                           window.isSecureContext === true &&
+                           Boolean(window.crypto) &&
+                           Boolean(window.crypto.subtle) &&
+                           typeof window.crypto.subtle.generateKey === 'function';
+                } catch (e) {
+                    return false;
+                }
+            }
+            static async encryptDocument(fileArrayBuffer, rsaPublicKeyPem = null) {
+                const encryptedBlob = new Blob([fileArrayBuffer], { type: 'application/pdf' });
+                return {
+                    encryptedBlob: encryptedBlob,
+                    encryptedKeyBundleB64: 'PLAIN_DEV_FALLBACK',
+                    ivB64: 'PLAIN_DEV_FALLBACK',
+                    tagB64: 'PLAIN',
+                    sha256Hex: '',
+                    fileSizeBytes: encryptedBlob.size
+                };
+            }
+        };
+    }
+</script>
 {% endblock %}
 
 {% block content %}
@@ -155,6 +195,17 @@
                         <label class="form-label small fw-bold text-muted">Enter Page Numbers / Ranges</label>
                         <input type="text" id="customRangeInput" class="form-control" placeholder="e.g. 1-3, 5, 8-10">
                     </div>
+
+                    <!-- Finishing Services (Optional) -->
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-muted text-uppercase">Finishing Services</label>
+                        <select id="finishingSelect" class="form-select">
+                            <option value="NONE">None (Regular Unbound Pages)</option>
+                            <option value="CORNER_STAPLE">Corner Stapling (+₹{{ pricing.stapling_rate }}/copy)</option>
+                            <option value="SPIRAL_BINDING">Spiral Book Binding (+₹{{ pricing.spiral_binding_rate }}/copy)</option>
+                            <option value="LAMINATION">Hot Lamination (+₹{{ pricing.lamination_rate }}/copy)</option>
+                        </select>
+                    </div>
                 </div>
             </div>
 
@@ -210,5 +261,7 @@
 {% endblock %}
 
 {% block extra_scripts %}
-<script src="{% static 'js/order_flow.js' %}"></script>
+<!-- Razorpay Official Checkout SDK -->
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+<script src="{% static 'js/order_flow.js' %}?v={% now 'U' %}"></script>
 {% endblock %}

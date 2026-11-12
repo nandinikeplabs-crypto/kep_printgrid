@@ -13,12 +13,17 @@ from .models import PrintOrder, PrintJob, PrintJobAttempt, PricingRule, PrintDoc
 from .forms import PricingRuleForm
 
 
-def shop_order_page(request, slug):
+def shop_order_page(request, shop_unique_id=None, slug=None):
     """
     Public customer ordering page reached when scanning the shop's permanent QR code.
-    Shows shop info, pause status, document uploader, PDF.js preview, preferences, and price quote.
+    Identifies the shop via unique shop_code (e.g., KEP12345) or slug.
+    Loads ONLY that specific shop's details, pricing, and active printer options.
     """
-    shop = get_object_or_404(Shop, slug=slug)
+    identifier = shop_unique_id or slug
+    from django.db.models import Q
+    shop = Shop.objects.filter(Q(shop_code__iexact=identifier) | Q(slug__iexact=identifier)).first()
+    if not shop:
+        raise Http404(f"No print shop found matching identifier '{identifier}'.")
 
     # Fetch active shop pricing
     pricing = PricingRule.objects.filter(shop=shop, is_active=True).first()
@@ -38,8 +43,24 @@ def shop_order_page(request, slug):
         'has_duplex_printer': has_duplex_printer,
         'has_a3_printer': has_a3_printer,
         'connector_public_key': shop.connector_public_key,
+        'is_customer_view': True,
     }
     return render(request, 'orders/shop_order_page.html', context)
+
+
+def customer_track_order_lookup(request):
+    """
+    Public order tracking lookup page (/track-order/).
+    Allows customer to enter order number or redirects if query parameter provided.
+    """
+    order_num = request.GET.get('order_number') or request.GET.get('order') or request.POST.get('order_number')
+    if order_num:
+        return redirect('customer_track_order', order_number=order_num.strip())
+    return render(request, 'orders/customer_track_order.html', {
+        'order': None,
+        'is_lookup': True,
+        'is_customer_view': True
+    })
 
 
 def customer_track_order(request, order_number):
@@ -47,9 +68,29 @@ def customer_track_order(request, order_number):
     Public order tracking page for customer.
     """
     order = get_object_or_404(PrintOrder.objects.select_related('shop', 'preference', 'print_job'), order_number=order_number)
+    job = getattr(order, 'print_job', None)
+
+    # Self-healing: If payment is verified or job assigned, trigger auto-spooler so customer sees completion
+    if order.status in [
+        PrintOrder.Status.PAYMENT_VERIFIED,
+        PrintOrder.Status.QUEUED,
+        PrintOrder.Status.ASSIGNED,
+        PrintOrder.Status.SENT_TO_PRINTER,
+        PrintOrder.Status.PRINTING,
+    ] and job:
+        try:
+            from payments.views import auto_spool_paid_order
+            auto_spool_paid_order(job)
+            order.refresh_from_db()
+            job.refresh_from_db()
+        except Exception:
+            pass
+
     context = {
         'order': order,
-        'job': getattr(order, 'print_job', None),
+        'job': job,
+        'is_lookup': False,
+        'is_customer_view': True,
     }
     return render(request, 'orders/customer_track_order.html', context)
 

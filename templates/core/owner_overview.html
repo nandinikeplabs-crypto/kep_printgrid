@@ -22,6 +22,39 @@
             </div>
         </div>
 
+        <!-- Shop Identity & Permanent Customer Ordering URL Banner -->
+        <div class="card border-primary border-2 shadow-sm rounded-4 mb-4 p-3 bg-white">
+            <div class="row align-items-center g-3">
+                <div class="col-md-7">
+                    <div class="d-flex align-items-center gap-2 mb-1">
+                        <span class="badge bg-primary px-3 py-1 fw-bold fs-6">SHOP ID: {{ shop.shop_code|default:shop.slug }}</span>
+                        {% if shop.is_accepting_orders %}
+                            <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1"><i class="bi bi-check-circle me-1"></i> Accepting Orders</span>
+                        {% else %}
+                            <span class="badge bg-warning-subtle text-warning border border-warning px-2 py-1"><i class="bi bi-pause-circle me-1"></i> Paused</span>
+                        {% endif %}
+                    </div>
+                    <h5 class="fw-bold mb-1 text-dark">{{ shop.name }}</h5>
+                    <div class="text-muted small">
+                        <i class="bi bi-qr-code text-primary me-1"></i> Customer Ordering URL: 
+                        <a href="{{ shop.order_page_url }}" target="_blank" class="fw-semibold text-primary text-decoration-none">
+                            {{ shop.order_page_url }} <i class="bi bi-box-arrow-up-right small"></i>
+                        </a>
+                    </div>
+                </div>
+                <div class="col-md-5 text-md-end">
+                    <div class="d-flex justify-content-md-end gap-2 flex-wrap">
+                        <a href="{% url 'core:download_qr_asset' asset_type='pdf' %}" class="btn btn-outline-primary btn-sm">
+                            <i class="bi bi-file-earmark-pdf me-1"></i> Download Printable A4 Stand (PDF)
+                        </a>
+                        <a href="{% url 'core:download_qr_asset' asset_type='png' %}" class="btn btn-primary btn-sm">
+                            <i class="bi bi-download me-1"></i> Download QR (PNG)
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Metrics Grid -->
         <div class="row g-3 mb-4">
             <div class="col-md-3">
@@ -125,9 +158,18 @@
                                 </td>
                                 <td class="text-muted small">{{ order.created_at|timesince }} ago</td>
                                 <td>
-                                    <a href="{% url 'orders:order_detail' order_number=order.order_number %}" class="btn btn-outline-secondary btn-sm py-0 px-2">
-                                        Inspect
-                                    </a>
+                                    {% if order.order_number %}
+                                        <a href="{% url 'orders:order_detail' order_number=order.order_number %}" class="btn btn-outline-secondary btn-sm py-0 px-2">
+                                            Inspect
+                                        </a>
+                                        {% if order.status != 'COMPLETED' %}
+                                            <a href="{% url 'orders:mark_completed' order_number=order.order_number %}" class="btn btn-success btn-sm py-0 px-2 ms-1 fw-semibold">
+                                                <i class="bi bi-check2"></i> Ready
+                                            </a>
+                                        {% endif %}
+                                    {% else %}
+                                        <span class="text-muted small">-</span>
+                                    {% endif %}
                                 </td>
                             </tr>
                         {% empty %}

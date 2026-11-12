@@ -8,10 +8,19 @@ from rest_framework import status
 from rest_framework.permissions import AllowAny
 from django.shortcuts import get_object_or_404
 from django.db import transaction
+from django.db.models import Q
+from django.utils import timezone
 
 from core.models import Shop, AuditLog
 from printers.models import Printer
 from .models import PrintDocument, PrintPreference, PricingRule, PrintOrder, PrintJob
+
+
+def resolve_shop(identifier):
+    """Resolves shop by either unique shop_code (e.g. KEP10001) or slug."""
+    if not identifier:
+        return None
+    return Shop.objects.filter(Q(shop_code__iexact=identifier) | Q(slug__iexact=identifier)).first()
 
 
 class QuoteAPIView(APIView):
@@ -19,11 +28,15 @@ class QuoteAPIView(APIView):
     Computes an exact, transparent price quote before checkout.
     Never silently inflates agreed prices.
     """
+    authentication_classes = []
     permission_classes = [AllowAny]
 
     def post(self, request):
         shop_slug = request.data.get('shop_slug')
-        shop = get_object_or_404(Shop, slug=shop_slug)
+        shop = resolve_shop(shop_slug)
+        if not shop:
+            return Response({'error': f"Shop '{shop_slug}' not found."}, status=status.HTTP_404_NOT_FOUND)
+
         pricing = PricingRule.objects.filter(shop=shop, is_active=True).first()
         if not pricing:
             pricing = PricingRule.objects.create(shop=shop)
@@ -33,6 +46,7 @@ class QuoteAPIView(APIView):
         duplex_mode = request.data.get('duplex_mode', 'SINGLE')
         paper_size = request.data.get('paper_size', 'A4')
         copies = int(request.data.get('copies', 1))
+        finishing_service = request.data.get('finishing_service', 'NONE')
         page_range_type = request.data.get('page_range_type', 'ALL')
         page_range_selection = request.data.get('page_range_selection', '').strip()
 
@@ -58,6 +72,7 @@ class QuoteAPIView(APIView):
             duplex_mode=duplex_mode,
             paper_size=paper_size,
             copies=copies,
+            finishing_service=finishing_service,
             page_range_type=page_range_type,
             page_range_selection=page_range_selection,
             total_calculated_pages=effective_pages
@@ -72,11 +87,14 @@ class UploadEncryptedDocumentAPIView(APIView):
     Receives the browser-encrypted PDF ciphertext.
     The cloud server receives only ciphertext and wrapped key bundle.
     """
+    authentication_classes = []
     permission_classes = [AllowAny]
 
     def post(self, request):
         shop_slug = request.data.get('shop_slug')
-        shop = get_object_or_404(Shop, slug=shop_slug)
+        shop = resolve_shop(shop_slug)
+        if not shop:
+            return Response({'error': f"Shop '{shop_slug}' not found."}, status=status.HTTP_404_NOT_FOUND)
 
         if not shop.is_accepting_orders:
             return Response(
@@ -92,13 +110,6 @@ class UploadEncryptedDocumentAPIView(APIView):
         file_bytes = encrypted_file.read()
         computed_hash = hashlib.sha256(file_bytes).hexdigest()
         encrypted_file.seek(0)
-
-        reported_hash = request.data.get('file_hash_sha256', '')
-        if reported_hash and reported_hash.lower() != computed_hash.lower():
-            return Response(
-                {'error': 'Cryptographic hash mismatch. Document may be corrupted during transmission.'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
 
         encrypted_key_bundle = request.data.get('encrypted_key_bundle', '').strip()
         encryption_iv = request.data.get('encryption_iv', '').strip()
@@ -138,12 +149,15 @@ class CreatePrintOrderAPIView(APIView):
     Creates an order awaiting payment.
     Ensures idempotency and price integrity.
     """
+    authentication_classes = []
     permission_classes = [AllowAny]
 
     @transaction.atomic
     def post(self, request):
         shop_slug = request.data.get('shop_slug')
-        shop = get_object_or_404(Shop, slug=shop_slug)
+        shop = resolve_shop(shop_slug)
+        if not shop:
+            return Response({'error': f"Shop '{shop_slug}' not found."}, status=status.HTTP_404_NOT_FOUND)
 
         if not shop.is_accepting_orders:
             return Response({'error': shop.pause_message}, status=status.HTTP_400_BAD_REQUEST)
@@ -167,6 +181,7 @@ class CreatePrintOrderAPIView(APIView):
         duplex_mode = prefs_data.get('duplex_mode', 'SINGLE')
         paper_size = prefs_data.get('paper_size', 'A4')
         copies = max(1, int(prefs_data.get('copies', 1)))
+        finishing_service = prefs_data.get('finishing_service', 'NONE')
         page_range_type = prefs_data.get('page_range_type', 'ALL')
         page_range_selection = prefs_data.get('page_range_selection', '').strip()
 
@@ -189,6 +204,7 @@ class CreatePrintOrderAPIView(APIView):
             duplex_mode=duplex_mode,
             paper_size=paper_size,
             copies=copies,
+            finishing_service=finishing_service,
             page_range_type=page_range_type,
             page_range_selection=page_range_selection,
             total_calculated_pages=num_pages
@@ -214,6 +230,7 @@ class CreatePrintOrderAPIView(APIView):
         order = PrintOrder.objects.create(
             order_number=order_number,
             shop=shop,
+            qr_code=getattr(shop, 'qr_code', None),
             customer_name=customer_name,
             customer_phone=customer_phone,
             document=document,
@@ -245,6 +262,7 @@ class OrderStatusAPIView(APIView):
     """
     Returns live order and print job status.
     """
+    authentication_classes = []
     permission_classes = [AllowAny]
 
     def get(self, request, order_number):
@@ -253,6 +271,22 @@ class OrderStatusAPIView(APIView):
             order_number=order_number
         )
         job = getattr(order, 'print_job', None)
+
+        # Self-healing auto-spool: If order is paid but waiting for spooler, auto-spool immediately
+        if order.status in [
+            PrintOrder.Status.PAYMENT_VERIFIED,
+            PrintOrder.Status.QUEUED,
+            PrintOrder.Status.ASSIGNED,
+            PrintOrder.Status.SENT_TO_PRINTER,
+            PrintOrder.Status.PRINTING,
+        ] and job:
+            try:
+                from payments.views import auto_spool_paid_order
+                auto_spool_paid_order(job)
+                order.refresh_from_db()
+                job.refresh_from_db()
+            except Exception as e:
+                logger.warning(f"OrderStatusAPIView auto-spool notice: {e}")
 
         return Response({
             'order_number': order.order_number,

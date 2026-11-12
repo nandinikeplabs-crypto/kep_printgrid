@@ -1,38 +1,75 @@
 {% extends 'base.html' %}
 
-{% block title %}Printer Management - {{ shop.name }}{% endblock %}
+{% block title %}Printer Management &amp; QR Mapping - {{ shop.name }}{% endblock %}
 
 {% block content %}
 <div class="dashboard-container">
     {% include 'components/dashboard_sidebar.html' %}
 
     <div class="dashboard-main">
-        <div class="d-flex justify-content-between align-items-center mb-4">
+        <!-- Header -->
+        <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
             <div>
-                <h4 class="fw-bold mb-1">Printer Management</h4>
-                <div class="text-muted small">Manage shop copiers, paper sizes, capabilities, and active routing status.</div>
+                <h4 class="fw-bold mb-1">Printer Management &amp; QR Mapping</h4>
+                <div class="text-muted small">Register Windows printers, assign them to your Shop QR code, and verify physical spooler connection.</div>
             </div>
-            <div>
-                <a href="{% url 'printers:printer_assignments' %}" class="btn btn-outline-primary btn-sm">
-                    <i class="bi bi-diagram-3 me-1"></i> Configure Routing Rules
+            <div class="d-flex gap-2">
+                <a href="{% url 'printers:printer_add' %}" class="btn btn-primary btn-sm fw-bold">
+                    <i class="bi bi-plus-circle me-1"></i> Add Custom Printer
                 </a>
-                <a href="{% url 'printers:reassign_queued_jobs' %}" class="btn btn-warning btn-sm text-dark ms-2">
-                    <i class="bi bi-arrow-repeat me-1"></i> Route Queued Jobs
+                <a href="{% url 'core:shop_qr_management' %}" class="btn btn-outline-dark btn-sm">
+                    <i class="bi bi-qr-code me-1"></i> View Shop QR Code
                 </a>
             </div>
         </div>
 
-        <div class="card border-0 shadow-sm rounded-4 bg-white overflow-hidden">
+        <!-- QR Code Mapping Summary Banner -->
+        <div class="card border-0 shadow-sm rounded-4 p-3 mb-4 bg-primary text-white">
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="p-2 bg-white text-primary rounded-3 fs-3">
+                        <i class="bi bi-qr-code-scan"></i>
+                    </div>
+                    <div>
+                        <div class="text-white-50 text-uppercase small fw-semibold" style="font-size:0.75rem;">Active QR Code Target Printer</div>
+                        <h5 class="fw-bold mb-0">
+                            {% if qr_record and qr_record.assigned_printer %}
+                                {{ qr_record.assigned_printer.name }}
+                                <span class="badge bg-light text-primary ms-2 fs-6">{{ qr_record.assigned_printer.printer_code }}</span>
+                            {% else %}
+                                <span class="text-warning">No Dedicated Printer Assigned</span> (Using Shop Default)
+                            {% endif %}
+                        </h5>
+                        <div class="small text-white-50 mt-1">
+                            Orders placed by customers scanning your counter QR code route to this printer automatically.
+                        </div>
+                    </div>
+                </div>
+                <div>
+                    <a href="{% url 'core:shop_qr_management' %}" class="btn btn-light btn-sm fw-bold text-primary px-3">
+                        <i class="bi bi-gear me-1"></i> Manage QR Mapping
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- 1. Registered Shop Printers Table -->
+        <div class="card border-0 shadow-sm rounded-4 bg-white overflow-hidden mb-4">
+            <div class="card-header bg-white py-3 border-0 d-flex justify-content-between align-items-center">
+                <h6 class="fw-bold mb-0 text-dark"><i class="bi bi-printer me-2 text-primary"></i>Registered Shop Printers ({{ printers.count }})</h6>
+                <span class="badge bg-light text-muted border">Persistent Fleet</span>
+            </div>
             <div class="table-responsive">
                 <table class="table table-hover align-middle mb-0">
                     <thead class="table-light small text-uppercase text-muted">
                         <tr>
-                            <th>Printer Name</th>
-                            <th>Windows Spooler Queue</th>
+                            <th>Printer Name &amp; ID</th>
+                            <th>Windows Queue Name</th>
+                            <th>QR Code Mapping</th>
                             <th>Status</th>
                             <th>Capabilities</th>
-                            <th>Operational State</th>
-                            <th>Actions</th>
+                            <th>Operational</th>
+                            <th class="text-end">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -45,20 +82,42 @@
                                             <span class="badge bg-primary" style="font-size: 0.65rem;">DEFAULT</span>
                                         {% endif %}
                                     </div>
-                                    <div class="text-muted small">{{ printer.model_name|default:"Local Spooler Copier" }}</div>
+                                    <div class="small">
+                                        <span class="badge bg-secondary-subtle text-secondary font-monospace" style="font-size:0.75rem;">{{ printer.printer_code }}</span>
+                                        <span class="text-muted ms-1" style="font-size:0.8rem;">{{ printer.model_name|default:"Windows Spooler Copier" }}</span>
+                                    </div>
                                 </td>
                                 <td class="font-monospace small text-muted">{{ printer.system_printer_name }}</td>
                                 <td>
-                                    {% if printer.is_online %}
+                                    {% if qr_record and qr_record.assigned_printer_id == printer.id %}
                                         <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1">
-                                            <i class="bi bi-circle-fill me-1" style="font-size: 0.5rem;"></i> Online
+                                            <i class="bi bi-qr-code me-1"></i> Mapped to Shop QR
+                                        </span>
+                                    {% else %}
+                                        <a href="{% url 'printers:printer_assign_to_qr' printer_id=printer.id %}" class="btn btn-outline-primary btn-sm py-0 px-2" style="font-size:0.75rem;">
+                                            <i class="bi bi-link-45deg me-1"></i> Assign to QR
+                                        </a>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if printer.detailed_status == 'Connected' %}
+                                        <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1">
+                                            <i class="bi bi-circle-fill me-1" style="font-size: 0.5rem;"></i> Connected
+                                        </span>
+                                    {% elif printer.detailed_status == 'Busy' %}
+                                        <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle px-2 py-1">
+                                            <i class="bi bi-hourglass-split me-1"></i> Busy
+                                        </span>
+                                    {% elif printer.detailed_status == 'Error' %}
+                                        <span class="badge bg-danger-subtle text-danger border border-danger-subtle px-2 py-1">
+                                            <i class="bi bi-exclamation-triangle me-1"></i> Error
                                         </span>
                                     {% else %}
                                         <span class="badge bg-secondary-subtle text-secondary border px-2 py-1">
                                             <i class="bi bi-slash-circle me-1"></i> Offline
                                         </span>
                                     {% endif %}
-                                    <div class="text-muted mt-1" style="font-size: 0.7rem;">{{ printer.last_status_message }}</div>
+                                    <div class="text-muted mt-1" style="font-size: 0.7rem;">{{ printer.last_status_message|default:"Ready" }}</div>
                                 </td>
                                 <td>
                                     <div class="d-flex flex-wrap gap-1">
@@ -77,29 +136,174 @@
                                     </div>
                                 </td>
                                 <td>
-                                    <a href="{% url 'printers:printer_toggle_active' printer_id=printer.id %}" class="btn btn-sm {% if printer.is_active %}btn-outline-success{% else %}btn-outline-secondary{% endif %}">
-                                        {% if printer.is_active %}<i class="bi bi-toggle-on me-1"></i> Enabled{% else %}<i class="bi bi-toggle-off me-1"></i> Disabled{% endif %}
+                                    <a href="{% url 'printers:printer_toggle_active' printer_id=printer.id %}" class="btn btn-sm {% if printer.is_active %}btn-outline-success{% else %}btn-outline-secondary{% endif %}" style="font-size:0.75rem;">
+                                        {% if printer.is_active %}<i class="bi bi-toggle-on me-1"></i> Active{% else %}<i class="bi bi-toggle-off me-1"></i> Disabled{% endif %}
                                     </a>
                                 </td>
-                                <td>
-                                    {% if not printer.is_default %}
-                                        <a href="{% url 'printers:printer_set_default' printer_id=printer.id %}" class="btn btn-outline-primary btn-sm py-0 px-2" title="Set as Shop Default">
-                                            Make Default
+                                <td class="text-end">
+                                    <div class="d-inline-flex align-items-center gap-1">
+                                        <a href="{% url 'printers:printer_test_print' printer_id=printer.id %}" class="btn btn-success btn-sm py-0 px-2 fw-semibold" title="Send Real Test Page to this Printer">
+                                            <i class="bi bi-printer me-1"></i>Test Print
                                         </a>
-                                    {% endif %}
+                                        <a href="{% url 'printers:printer_edit' printer_id=printer.id %}" class="btn btn-outline-secondary btn-sm py-0 px-2" title="Change Printer Configurations">
+                                            <i class="bi bi-pencil me-1"></i>Change
+                                        </a>
+                                        {% if not printer.is_default %}
+                                            <a href="{% url 'printers:printer_set_default' printer_id=printer.id %}" class="btn btn-outline-primary btn-sm py-0 px-2" title="Set as Shop Default">
+                                                Default
+                                            </a>
+                                        {% endif %}
+                                        <a href="{% url 'printers:printer_delete' printer_id=printer.id %}" class="btn btn-outline-danger btn-sm py-0 px-2" onclick="return confirm('Remove {{ printer.name }} from shop fleet?');" title="Remove Printer">
+                                            <i class="bi bi-trash"></i>
+                                        </a>
+                                    </div>
                                 </td>
                             </tr>
                         {% empty %}
                             <tr>
-                                <td colspan="6" class="text-center py-5 text-muted">
+                                <td colspan="7" class="text-center py-5 text-muted">
                                     <div class="display-6 text-muted mb-2"><i class="bi bi-printer"></i></div>
-                                    <p class="mb-1">No printers connected to this shop yet.</p>
-                                    <p class="small">Launch the <code>KEP PrintGrid Connector</code> on your Windows shop PC to automatically detect your local printers.</p>
+                                    <p class="mb-1 fw-bold">No printers registered yet.</p>
+                                    <p class="small">Detect and register your Windows printer below to connect it to your Shop QR code.</p>
                                 </td>
                             </tr>
                         {% endfor %}
                     </tbody>
                 </table>
+            </div>
+        </div>
+
+        <!-- 2. Auto-Detected Windows Printers Panel -->
+        <div class="card border-0 shadow-sm rounded-4 bg-white p-4 mb-4">
+            <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+                <div>
+                    <h6 class="fw-bold mb-1 text-dark">
+                        <i class="bi bi-windows me-2 text-primary"></i>Auto-Detected Windows Printers
+                    </h6>
+                    <div class="text-muted small">Printers detected on this computer via Windows Print Spooler. Click <strong>Register to Shop</strong> to connect one to your QR code.</div>
+                </div>
+                <button class="btn btn-outline-primary btn-sm" onclick="window.location.reload();">
+                    <i class="bi bi-arrow-clockwise me-1"></i> Rescan Windows Printers
+                </button>
+            </div>
+
+            <div class="row g-3">
+                {% for dp in detected_printers %}
+                    <div class="col-md-6 col-lg-4">
+                        <div class="card h-100 border {% if dp.is_registered %}border-success-subtle bg-success-subtle bg-opacity-10{% else %}border-light-subtle bg-light{% endif %} rounded-4 p-3 shadow-sm">
+                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                <h6 class="fw-bold mb-0 text-dark">{{ dp.friendly_name }}</h6>
+                                {% if dp.is_registered %}
+                                    <span class="badge bg-success"><i class="bi bi-check2"></i> Registered</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">Available</span>
+                                {% endif %}
+                            </div>
+                            <div class="text-muted small font-monospace mb-2">{{ dp.system_name }}</div>
+                            <div class="small mb-3">
+                                <span class="badge bg-light text-dark border me-1">{% if dp.capabilities.supports_color %}Colour &amp; B&amp;W{% else %}B&amp;W Only{% endif %}</span>
+                                <span class="badge bg-light text-dark border">600 DPI</span>
+                            </div>
+
+                            <div class="mt-auto">
+                                {% if not dp.is_registered %}
+                                    <form method="post" action="{% url 'printers:printer_register_detected' %}">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="name" value="{{ dp.friendly_name }}">
+                                        <input type="hidden" name="system_printer_name" value="{{ dp.system_name }}">
+                                        <input type="hidden" name="model_name" value="{{ dp.friendly_name }}">
+                                        <input type="hidden" name="handles_color" value="{% if dp.capabilities.supports_color %}1{% else %}0{% endif %}">
+                                        <div class="form-check small mb-2">
+                                            <input class="form-check-input" type="checkbox" name="assign_to_qr" value="1" id="assign_qr_{{ forloop.counter }}" checked>
+                                            <label class="form-check-label" for="assign_qr_{{ forloop.counter }}">
+                                                Assign directly to Shop QR Code
+                                            </label>
+                                        </div>
+                                        <button type="submit" class="btn btn-primary btn-sm w-100 fw-bold">
+                                            <i class="bi bi-plus-lg me-1"></i> Register to Shop
+                                        </button>
+                                    </form>
+                                {% else %}
+                                    <div class="text-success small fw-semibold">
+                                        <i class="bi bi-check-circle-fill me-1"></i> Connected to this shop
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                {% empty %}
+                    <div class="col-12">
+                        <div class="alert alert-info small mb-0 rounded-3">
+                            <i class="bi bi-info-circle me-1"></i> No local physical printers currently detected. You can register standard printer templates below.
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- 3. Popular Xerox Hardware Templates -->
+        <div class="card border-0 shadow-sm rounded-4 bg-white p-4">
+            <h6 class="fw-bold mb-2 text-dark"><i class="bi bi-lightning-charge me-2 text-warning"></i>Popular Xerox Hardware Fast-Connect</h6>
+            <div class="text-muted small mb-3">One-click register common Xerox shop physical printers and connect them directly to your counter QR code:</div>
+
+            <div class="row g-2">
+                <div class="col-sm-6 col-md-3">
+                    <form method="post" action="{% url 'printers:printer_register_detected' %}">
+                        {% csrf_token %}
+                        <input type="hidden" name="name" value="HP Smart Tank 530">
+                        <input type="hidden" name="system_printer_name" value="HP Smart Tank 530 series">
+                        <input type="hidden" name="model_name" value="HP Smart Tank 530 All-in-One (Product No: 4SB24A)">
+                        <input type="hidden" name="handles_color" value="1">
+                        <input type="hidden" name="assign_to_qr" value="1">
+                        <input type="hidden" name="set_default" value="1">
+                        <button type="submit" class="btn btn-outline-dark btn-sm w-100 text-start p-2 rounded-3">
+                            <div class="fw-bold text-primary"><i class="bi bi-printer me-1"></i> HP Smart Tank 530</div>
+                            <div class="text-muted" style="font-size:0.75rem;">Color Ink Tank • Auto-Assign QR</div>
+                        </button>
+                    </form>
+                </div>
+                <div class="col-sm-6 col-md-3">
+                    <form method="post" action="{% url 'printers:printer_register_detected' %}">
+                        {% csrf_token %}
+                        <input type="hidden" name="name" value="Canon PIXMA G3010">
+                        <input type="hidden" name="system_printer_name" value="Canon G3010 series">
+                        <input type="hidden" name="model_name" value="Canon PIXMA G3010 Color InkTank">
+                        <input type="hidden" name="handles_color" value="1">
+                        <input type="hidden" name="assign_to_qr" value="1">
+                        <button type="submit" class="btn btn-outline-dark btn-sm w-100 text-start p-2 rounded-3">
+                            <div class="fw-bold text-danger"><i class="bi bi-printer me-1"></i> Canon PIXMA G-Series</div>
+                            <div class="text-muted" style="font-size:0.75rem;">Color Ink Tank • Auto-Assign QR</div>
+                        </button>
+                    </form>
+                </div>
+                <div class="col-sm-6 col-md-3">
+                    <form method="post" action="{% url 'printers:printer_register_detected' %}">
+                        {% csrf_token %}
+                        <input type="hidden" name="name" value="Epson EcoTank L3250">
+                        <input type="hidden" name="system_printer_name" value="EPSON L3250 Series">
+                        <input type="hidden" name="model_name" value="Epson EcoTank L3250 Multi-Function">
+                        <input type="hidden" name="handles_color" value="1">
+                        <input type="hidden" name="assign_to_qr" value="1">
+                        <button type="submit" class="btn btn-outline-dark btn-sm w-100 text-start p-2 rounded-3">
+                            <div class="fw-bold text-success"><i class="bi bi-printer me-1"></i> Epson EcoTank L-Series</div>
+                            <div class="text-muted" style="font-size:0.75rem;">EcoTank Multi-Function</div>
+                        </button>
+                    </form>
+                </div>
+                <div class="col-sm-6 col-md-3">
+                    <form method="post" action="{% url 'printers:printer_register_detected' %}">
+                        {% csrf_token %}
+                        <input type="hidden" name="name" value="Microsoft Print to PDF">
+                        <input type="hidden" name="system_printer_name" value="Microsoft Print to PDF">
+                        <input type="hidden" name="model_name" value="Windows Virtual PDF Spooler">
+                        <input type="hidden" name="handles_color" value="1">
+                        <input type="hidden" name="assign_to_qr" value="1">
+                        <button type="submit" class="btn btn-outline-dark btn-sm w-100 text-start p-2 rounded-3">
+                            <div class="fw-bold text-secondary"><i class="bi bi-file-earmark-pdf me-1"></i> Virtual PDF Spooler</div>
+                            <div class="text-muted" style="font-size:0.75rem;">Software Testing Spooler</div>
+                        </button>
+                    </form>
+                </div>
             </div>
         </div>
     </div>

@@ -5,8 +5,11 @@ app_name = 'core'
 
 urlpatterns = [
     path('', views.home, name='home'),
+    path('scanner/', views.qr_scanner_page, name='scanner'),
     path('register/', views.register_owner, name='register'),
+    path('register-shop/', views.register_owner, name='register_shop'),
     path('login/', views.user_login, name='login'),
+    path('shop-login/', views.user_login, name='shop_login'),
     path('logout/', views.user_logout, name='logout'),
     path('dashboard/', views.dashboard_dispatch, name='dashboard'),
     path('dashboard/overview/', views.owner_overview, name='owner_overview'),

@@ -30,12 +30,31 @@ class RoutingService:
         return eligible
 
     @classmethod
-    def determine_target_printer(cls, shop, preference):
+    def determine_target_printer(cls, shop, preference, qr_code=None):
         """
-        Selects the best target printer according to shop assignment rules,
-        default settings, and active capabilities.
+        Selects the best target printer:
+        1. If this order's QR code has an assigned physical printer capable of the job and online, prioritize it.
+        2. If the shop's counter QR code has an assigned physical printer capable of the job and online, prioritize it.
+        3. Otherwise use PrinterAssignment routing rules (B&W, Color, Duplex, A3).
+        4. Otherwise use the shop's default registered printer if capable and online.
+        5. Fallback to any online eligible printer belonging to THIS shop.
+        6. Return None if no compatible online printer is available, placing the job into QUEUED state.
+        NEVER route an order to another shop's printer!
         """
-        # Determine assignment key
+        # 1. Directly check order QR code assigned printer
+        if qr_code and qr_code.assigned_printer and qr_code.assigned_printer.shop_id == shop.id:
+            assigned = qr_code.assigned_printer
+            if assigned.is_active and assigned.is_online and assigned.can_print(preference.color_mode, preference.duplex_mode, preference.paper_size):
+                return assigned
+
+        # 2. Check shop's counter QR code assigned printer
+        shop_qr = getattr(shop, 'qr_code', None)
+        if shop_qr and shop_qr.assigned_printer and shop_qr.assigned_printer.shop_id == shop.id:
+            assigned = shop_qr.assigned_printer
+            if assigned.is_active and assigned.is_online and assigned.can_print(preference.color_mode, preference.duplex_mode, preference.paper_size):
+                return assigned
+
+        # 3. Intelligent Assignment Rules
         is_color = preference.color_mode == 'COLOR'
         is_double = preference.duplex_mode == 'DOUBLE'
         is_a3 = preference.paper_size == 'A3'
@@ -61,23 +80,24 @@ class RoutingService:
 
         if assignment:
             primary = assignment.primary_printer
-            if primary and primary.is_active and primary.is_online and primary.can_print(preference.color_mode, preference.duplex_mode, preference.paper_size):
-                return primary
+            if primary and primary.is_active and primary.shop_id == shop.id:
+                if primary.is_online and primary.can_print(preference.color_mode, preference.duplex_mode, preference.paper_size):
+                    return primary
             fallback = assignment.fallback_printer
-            if fallback and fallback.is_active and fallback.is_online and fallback.can_print(preference.color_mode, preference.duplex_mode, preference.paper_size):
-                return fallback
+            if fallback and fallback.is_active and fallback.shop_id == shop.id:
+                if fallback.is_online and fallback.can_print(preference.color_mode, preference.duplex_mode, preference.paper_size):
+                    return fallback
 
-        # If assignment didn't match an online capable printer, try default printer
+        # 4. Try shop default registered printer
         default_printer = Printer.objects.filter(shop=shop, is_default=True, is_active=True, is_online=True).first()
         if default_printer and default_printer.can_print(preference.color_mode, preference.duplex_mode, preference.paper_size):
             return default_printer
 
-        # Fallback to any online eligible printer
+        # 5. Fallback to any online eligible printer registered to this shop
         eligible = cls.get_eligible_printers(shop, preference, require_online=True)
         if eligible:
             return eligible[0]
 
-        # No online capable printer found right now
         return None
 
     @classmethod
@@ -98,7 +118,8 @@ class RoutingService:
             job = PrintJob(order=order)
 
         shop = order.shop
-        target_printer = cls.determine_target_printer(shop, order.preference)
+        qr_code = getattr(order, 'qr_code', None) or getattr(shop, 'qr_code', None)
+        target_printer = cls.determine_target_printer(shop, order.preference, qr_code=qr_code)
 
         # Associate active shop connector
         active_connector = Connector.objects.filter(shop=shop, is_active=True).order_by('-last_heartbeat').first()

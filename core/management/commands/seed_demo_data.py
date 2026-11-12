@@ -175,51 +175,54 @@ class Command(BaseCommand):
             copies=1,
             total_calculated_pages=6
         )
-        order = PrintOrder.objects.create(
-            order_number="ORD-20261111-9284",
-            shop=shop,
-            customer_name="Pooja Sharma",
-            customer_phone="+91 9898989898",
-            document=doc,
-            preference=pref,
-            status=PrintOrder.Status.PRINTING,
-            total_amount=Decimal("10.50"),
-            pricing_breakdown={
-                "unit_rate": 3.5,
-                "rate_label": "B&W Double-Sided",
-                "sheets_per_copy": 3,
-                "copies": 1,
-                "total_sheets": 3,
-                "total_amount": 10.50
-            },
-            idempotency_key="seed_demo_order_001"
+        order, o_created = PrintOrder.objects.get_or_create(
+            idempotency_key="seed_demo_order_001",
+            defaults={
+                "order_number": "ORD-20261111-9284",
+                "shop": shop,
+                "customer_name": "Pooja Sharma",
+                "customer_phone": "+91 9898989898",
+                "document": doc,
+                "preference": pref,
+                "status": PrintOrder.Status.PRINTING,
+                "total_amount": Decimal("10.50"),
+                "pricing_breakdown": {
+                    "unit_rate": 3.5,
+                    "rate_label": "B&W Double-Sided",
+                    "sheets_per_copy": 3,
+                    "copies": 1,
+                    "total_sheets": 3,
+                    "total_amount": 10.50
+                }
+            }
         )
-        job = PrintJob.objects.create(
-            order=order,
-            printer=p1,
-            status=PrintJob.Status.SUBMITTED_TO_SPOOLER,
-            assigned_at=timezone.now(),
-            dispatched_at=timezone.now()
-        )
-        PrintJobAttempt.objects.create(
-            job=job,
-            printer=p1,
-            attempt_number=1,
-            status="SUBMITTED_TO_SPOOLER",
-            error_message="Submitted to Windows Spooler Queue HP_LaserJet_Pro_M428fdw"
-        )
+        if o_created:
+            job = PrintJob.objects.create(
+                order=order,
+                printer=p1,
+                status=PrintJob.Status.SUBMITTED_TO_SPOOLER,
+                assigned_at=timezone.now(),
+                dispatched_at=timezone.now()
+            )
+            PrintJobAttempt.objects.create(
+                job=job,
+                printer=p1,
+                attempt_number=1,
+                status="SUBMITTED_TO_SPOOLER",
+                error_message="Submitted to Windows Spooler Queue HP_LaserJet_Pro_M428fdw"
+            )
 
-        Payment.objects.create(
-            order=order,
-            gateway_order_id="order_demo_seed_001",
-            gateway_payment_id="pay_demo_seed_001",
-            gateway_signature="sig_demo_seed_001",
-            gateway_name="RAZORPAY_SANDBOX",
-            amount=Decimal("10.50"),
-            currency="INR",
-            status=Payment.Status.CAPTURED,
-            idempotency_key="pay_idemp_seed_001",
-            verified_at=timezone.now()
-        )
+            Payment.objects.create(
+                order=order,
+                gateway_order_id="order_demo_seed_001",
+                gateway_payment_id="pay_demo_seed_001",
+                gateway_signature="sig_demo_seed_001",
+                gateway_name="RAZORPAY_SANDBOX",
+                amount=Decimal("10.50"),
+                currency="INR",
+                status=Payment.Status.CAPTURED,
+                idempotency_key="pay_idemp_seed_001",
+                verified_at=timezone.now()
+            )
 
         self.stdout.write(self.style.SUCCESS("KEP PrintGrid seeded with active demo shop, staff, copiers, and orders!"))

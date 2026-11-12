@@ -16,7 +16,7 @@ load_dotenv(BASE_DIR / '.env')
 SECRET_KEY = os.getenv('SECRET_KEY', 'insecure-dev-key-kep-printgrid-2026')
 DEBUG = os.getenv('DEBUG', 'True').lower() in ('true', '1', 'yes')
 
-ALLOWED_HOSTS = [host.strip() for host in os.getenv('ALLOWED_HOSTS', '127.0.0.1,localhost,testserver').split(',') if host.strip()]
+ALLOWED_HOSTS = ['*'] if DEBUG else [host.strip() for host in os.getenv('ALLOWED_HOSTS', '127.0.0.1,localhost,testserver').split(',') if host.strip()]
 
 # Application definition
 INSTALLED_APPS = [
@@ -95,6 +95,9 @@ else:
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
             'NAME': BASE_DIR / 'db.sqlite3',
+            'OPTIONS': {
+                'timeout': 60,
+            },
         }
     }
 
@@ -129,13 +132,14 @@ LOGIN_URL = 'core:login'
 LOGIN_REDIRECT_URL = 'core:dashboard'
 LOGOUT_REDIRECT_URL = 'core:login'
 
-# REST Framework settings
+# Security & Cross-Origin Policies (allows Razorpay card 3DS authentication popups without about:blank blocks)
+SECURE_CROSS_ORIGIN_OPENER_POLICY = 'same-origin-allow-popups'
+
+# REST Framework settings (Public stateless REST endpoints for customers & printer connector)
 REST_FRAMEWORK = {
-    'DEFAULT_AUTHENTICATION_CLASSES': [
-        'rest_framework.authentication.SessionAuthentication',
-    ],
+    'DEFAULT_AUTHENTICATION_CLASSES': [],
     'DEFAULT_PERMISSION_CLASSES': [
-        'rest_framework.permissions.IsAuthenticated',
+        'rest_framework.permissions.AllowAny',
     ],
     'DEFAULT_RENDERER_CLASSES': [
         'rest_framework.renderers.JSONRenderer',
@@ -148,8 +152,20 @@ RAZORPAY_KEY_SECRET = os.getenv('RAZORPAY_KEY_SECRET', 'rzp_test_kep_demo_secret
 RAZORPAY_WEBHOOK_SECRET = os.getenv('RAZORPAY_WEBHOOK_SECRET', 'rzp_test_webhook_secret')
 PAYMENT_SANDBOX_MODE = os.getenv('PAYMENT_SANDBOX_MODE', 'True').lower() in ('true', '1', 'yes')
 
-# Base URL for QR codes
+# Base URL for QR codes & Public Access for Mobile Data customers
+PUBLIC_URL = os.getenv('PUBLIC_URL', '')
 BASE_APP_URL = os.getenv('BASE_APP_URL', 'http://127.0.0.1:8000')
+
+CSRF_TRUSTED_ORIGINS = [
+    'https://*.trycloudflare.com',
+    'https://*.loca.lt',
+    'https://*.lhr.life',
+    'https://*.pinggy.link',
+    'https://*.ngrok-free.app',
+    'https://*.ngrok.io',
+    'http://127.0.0.1:8080',
+    'http://localhost:8080',
+]
 
 # Max Document Upload Size (e.g. 50 MB)
 MAX_DOCUMENT_UPLOAD_SIZE = 50 * 1024 * 1024

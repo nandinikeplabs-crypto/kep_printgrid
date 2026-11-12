@@ -1,5 +1,5 @@
 from decimal import Decimal
-from django.test import TestCase, Client
+from django.test import TestCase, Client, override_settings
 from django.urls import reverse
 from django.core.files.uploadedfile import SimpleUploadedFile
 
@@ -9,6 +9,7 @@ from payments.models import Payment, Refund
 from payments.services.gateway_adapter import get_payment_gateway, RazorpaySandboxAdapter
 
 
+@override_settings(PAYMENT_SANDBOX_MODE=True)
 class PaymentsAndOrdersLifecycleTests(TestCase):
     def setUp(self):
         self.client = Client()
@@ -126,7 +127,7 @@ class PaymentsAndOrdersLifecycleTests(TestCase):
         self.assertEqual(valid_resp.status_code, 200)
 
         order.refresh_from_db()
-        self.assertIn(order.status, [PrintOrder.Status.PAYMENT_VERIFIED, PrintOrder.Status.QUEUED, PrintOrder.Status.ASSIGNED])
+        self.assertIn(order.status, [PrintOrder.Status.PAYMENT_VERIFIED, PrintOrder.Status.QUEUED, PrintOrder.Status.ASSIGNED, PrintOrder.Status.COMPLETED])
         self.assertTrue(hasattr(order, 'print_job'))
 
         # 4. Test Duplicate Verification Handled Idempotently

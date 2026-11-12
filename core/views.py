@@ -25,6 +25,14 @@ def home(request):
     return render(request, 'core/home.html')
 
 
+def qr_scanner_page(request):
+    """
+    Dedicated in-browser QR Code scanner page.
+    Allows customers to scan a counter QR stand using laptop webcam or phone camera.
+    """
+    return render(request, 'core/scanner.html', {'is_customer_view': True})
+
+
 def register_owner(request):
     """
     Registration flow for shop owners.
@@ -46,8 +54,8 @@ def register_owner(request):
                 ip_address=request.META.get('REMOTE_ADDR'),
                 details={'shop_name': shop.name, 'slug': shop.slug}
             )
-            messages.success(request, f"Welcome to KEP PrintGrid! Your shop '{shop.name}' is now active with a permanent QR code.")
-            return redirect('core:owner_overview')
+            messages.success(request, f"Welcome to KEP PrintGrid! Your shop '{shop.name}' is now active with unique Shop ID: {shop.shop_code}.")
+            return redirect('dashboard')
     else:
         form = ShopOwnerRegistrationForm()
 
@@ -176,26 +184,58 @@ def owner_overview(request):
 @owner_required
 def shop_qr_management(request):
     """
-    Shop Permanent QR Code display, regeneration, and download options.
+    Shop Permanent QR Code display, regeneration, physical printer mapping, and download options.
     """
+    from printers.models import Printer
+
     shop = get_user_shop(request.user)
     qr_record = getattr(shop, 'qr_code', None)
 
-    if not qr_record or not qr_record.qr_code_image:
+    current_url = shop.order_page_url
+    if not qr_record or not qr_record.qr_code_image or getattr(qr_record, 'qr_target_url', '') != current_url:
         qr_record = generate_shop_qr_code(shop)
 
-    if request.method == 'POST' and 'regenerate' in request.POST:
-        qr_record = generate_shop_qr_code(shop)
-        AuditLog.objects.create(
-            shop=shop,
-            user=request.user,
-            action='QR_REGENERATED',
-            resource_type='ShopQRCode',
-            resource_id=str(qr_record.id),
-            details={'target_url': shop.order_page_url}
-        )
-        messages.success(request, "QR Code assets re-rendered successfully!")
-        return redirect('core:shop_qr_management')
+    # Ensure QR code has an assigned printer if printers exist
+    if not qr_record.assigned_printer:
+        default_p = shop.printers.filter(is_default=True).first() or shop.printers.first()
+        if default_p:
+            qr_record.assigned_printer = default_p
+            qr_record.save(update_fields=['assigned_printer', 'updated_at'])
+
+    if request.method == 'POST':
+        if 'regenerate' in request.POST:
+            qr_record = generate_shop_qr_code(shop)
+            AuditLog.objects.create(
+                shop=shop,
+                user=request.user,
+                action='QR_REGENERATED',
+                resource_type='ShopQRCode',
+                resource_id=str(qr_record.id),
+                details={'target_url': shop.order_page_url}
+            )
+            messages.success(request, "QR Code assets re-rendered successfully!")
+            return redirect('core:shop_qr_management')
+
+        elif 'assign_printer' in request.POST:
+            printer_id = request.POST.get('assigned_printer_id')
+            if printer_id:
+                printer = get_object_or_404(Printer, id=printer_id, shop=shop)
+                qr_record.assigned_printer = printer
+                qr_record.save(update_fields=['assigned_printer', 'updated_at'])
+                AuditLog.objects.create(
+                    shop=shop,
+                    user=request.user,
+                    action='PRINTER_ASSIGNED_TO_QR',
+                    resource_type='ShopQRCode',
+                    resource_id=str(qr_record.id),
+                    details={'printer_id': str(printer.id), 'printer_name': printer.name, 'printer_code': printer.printer_code}
+                )
+                messages.success(request, f"Printer '{printer.name}' [ID: {printer.printer_code}] permanently mapped to this QR code!")
+            else:
+                qr_record.assigned_printer = None
+                qr_record.save(update_fields=['assigned_printer', 'updated_at'])
+                messages.info(request, "QR code will now dynamically route to the shop's default printer.")
+            return redirect('core:shop_qr_management')
 
     poster_pdf_path = os.path.join('media', 'qr_codes', f"shop_qr_{shop.slug}_poster.pdf")
     has_poster_pdf = os.path.exists(poster_pdf_path)
@@ -203,6 +243,8 @@ def shop_qr_management(request):
     context = {
         'shop': shop,
         'qr_record': qr_record,
+        'shop_printers': shop.printers.all(),
+        'assigned_printer': qr_record.assigned_printer,
         'has_poster_pdf': has_poster_pdf,
     }
     return render(request, 'core/shop_qr_management.html', context)
@@ -215,13 +257,15 @@ def download_qr_asset(request, asset_type):
     """
     shop = get_user_shop(request.user)
     if asset_type == 'png':
+        current_url = shop.order_page_url
         qr_path = os.path.join('media', 'qr_codes', f"shop_qr_{shop.slug}.png")
-        if not os.path.exists(qr_path):
+        if not os.path.exists(qr_path) or getattr(getattr(shop, 'qr_code', None), 'qr_target_url', '') != current_url:
             generate_shop_qr_code(shop)
         return FileResponse(open(qr_path, 'rb'), as_attachment=True, filename=f"{shop.slug}_permanent_qr.png")
     elif asset_type == 'pdf':
+        current_url = shop.order_page_url
         pdf_path = os.path.join('media', 'qr_codes', f"shop_qr_{shop.slug}_poster.pdf")
-        if not os.path.exists(pdf_path):
+        if not os.path.exists(pdf_path) or getattr(getattr(shop, 'qr_code', None), 'qr_target_url', '') != current_url:
             generate_shop_qr_code(shop)
         return FileResponse(open(pdf_path, 'rb'), as_attachment=True, filename=f"{shop.slug}_display_poster.pdf")
     raise Http404("Asset type not found")

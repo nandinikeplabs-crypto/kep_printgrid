@@ -141,7 +141,11 @@ class LoginForm(forms.Form):
 class ShopSettingsForm(forms.ModelForm):
     class Meta:
         model = Shop
-        fields = ['name', 'phone', 'email', 'address', 'is_accepting_orders', 'pause_message']
+        fields = [
+            'name', 'phone', 'email', 'address',
+            'is_accepting_orders', 'pause_message',
+            'razorpay_key_id', 'razorpay_key_secret'
+        ]
         widgets = {
             'name': forms.TextInput(attrs={'class': 'form-control'}),
             'phone': forms.TextInput(attrs={'class': 'form-control'}),
@@ -149,6 +153,14 @@ class ShopSettingsForm(forms.ModelForm):
             'address': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
             'is_accepting_orders': forms.CheckboxInput(attrs={'class': 'form-check-input', 'role': 'switch'}),
             'pause_message': forms.TextInput(attrs={'class': 'form-control'}),
+            'razorpay_key_id': forms.TextInput(attrs={
+                'class': 'form-control font-monospace',
+                'placeholder': 'rzp_live_... or rzp_test_... (leave empty for sandbox)'
+            }),
+            'razorpay_key_secret': forms.PasswordInput(render_value=True, attrs={
+                'class': 'form-control font-monospace',
+                'placeholder': 'Razorpay Key Secret'
+            }),
         }
 
 

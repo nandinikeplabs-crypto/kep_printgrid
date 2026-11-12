@@ -124,7 +124,16 @@ class PrintGridConnectorClient:
 
         # 3. Download encrypted document content
         try:
-            file_resp = requests.get(download_url, timeout=30)
+            from urllib.parse import urlparse, urlunparse
+            parsed_dl = urlparse(download_url)
+            parsed_srv = urlparse(self.server_url)
+            local_dl_url = urlunparse((parsed_srv.scheme, parsed_srv.netloc, parsed_dl.path, '', parsed_dl.query, ''))
+
+            try:
+                file_resp = requests.get(local_dl_url, timeout=20)
+            except Exception:
+                file_resp = requests.get(download_url, timeout=20)
+
             if file_resp.status_code != 200:
                 raise RuntimeError(f"Failed to download encrypted file payload ({file_resp.status_code})")
             encrypted_bytes = file_resp.content

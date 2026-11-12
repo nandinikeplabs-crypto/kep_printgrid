@@ -6,23 +6,37 @@ from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
 from orders import views as orders_views
+from core import views as core_views
 
 urlpatterns = [
     path('admin/', admin.site.urls),
 
-    # Permanent QR Code destination: https://domain/shop/<shop-unique-slug>/
+    # Main Website Entry
+    path('', core_views.home, name='home'),
+
+    # 1. Shop Owner Interface Dedicated Routes
+    path('register-shop/', core_views.register_owner, name='register_shop'),
+    path('register-shop', core_views.register_owner),
+    path('shop-login/', core_views.user_login, name='shop_login'),
+    path('shop-login', core_views.user_login),
+    path('dashboard/', core_views.dashboard_dispatch, name='dashboard'),
+    path('dashboard', core_views.dashboard_dispatch),
+    path('shop/qr/', core_views.shop_qr_management, name='shop_qr_shortcut'),
+    path('shop/qr', core_views.shop_qr_management),
+
+    # 2. Customer Interface Dedicated Routes
     path('shop/<slug:slug>/', orders_views.shop_order_page, name='shop_order_page'),
+    path('shop/<slug:slug>', orders_views.shop_order_page),
+    path('shop/<str:shop_unique_id>/', orders_views.shop_order_page, name='shop_order_page_unique'),
+    path('track-order/', orders_views.customer_track_order_lookup, name='track_order'),
+    path('track-order', orders_views.customer_track_order_lookup),
+    path('track-order/<str:order_number>/', orders_views.customer_track_order, name='customer_track_order'),
+    path('track-order/<str:order_number>', orders_views.customer_track_order),
 
-    # Core (Auth, Dashboards, QR, Settings, Staff, Reports)
+    # Core & Feature Module Routing
     path('', include('core.urls')),
-
-    # Orders (Ordering API, Tracking, Order Management, Pricing)
     path('orders/', include('orders.urls')),
-
-    # Printers & Local Connector (Printer Management, Spooler Sync, Heartbeat)
     path('printers/', include('printers.urls')),
-
-    # Payments (Razorpay Integration, Verification, Webhooks, Refunds)
     path('payments/', include('payments.urls')),
 ]
 

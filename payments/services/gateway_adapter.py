@@ -86,11 +86,12 @@ class RazorpaySandboxAdapter(BasePaymentGatewayAdapter):
 class RazorpayLiveAdapter(BasePaymentGatewayAdapter):
     """
     Live Razorpay API Integration using standard HTTP requests.
+    Supports either platform credentials or shop-specific credentials.
     """
-    def __init__(self):
-        self.key_id = settings.RAZORPAY_KEY_ID
-        self.key_secret = settings.RAZORPAY_KEY_SECRET
-        self.webhook_secret = settings.RAZORPAY_WEBHOOK_SECRET
+    def __init__(self, key_id=None, key_secret=None, webhook_secret=None):
+        self.key_id = key_id or getattr(settings, 'RAZORPAY_KEY_ID', '')
+        self.key_secret = key_secret or getattr(settings, 'RAZORPAY_KEY_SECRET', '')
+        self.webhook_secret = webhook_secret or getattr(settings, 'RAZORPAY_WEBHOOK_SECRET', '')
         self.base_url = "https://api.razorpay.com/v1"
 
     def create_order(self, amount: Decimal, currency: str, receipt: str, notes: dict) -> dict:
@@ -134,11 +135,23 @@ class RazorpayLiveAdapter(BasePaymentGatewayAdapter):
         return resp.json()
 
 
-def get_payment_gateway() -> BasePaymentGatewayAdapter:
+def get_payment_gateway(shop=None) -> BasePaymentGatewayAdapter:
     """
     Returns the appropriate payment gateway adapter based on configuration.
+    If shop has genuine custom Razorpay credentials set, uses them directly.
+    Otherwise falls back to settings or RazorpaySandboxAdapter.
     """
+    if shop and getattr(shop, 'razorpay_key_id', None) and getattr(shop, 'razorpay_key_secret', None):
+        key_id = shop.razorpay_key_id.strip()
+        key_secret = shop.razorpay_key_secret.strip()
+        if key_id.startswith('rzp_') and len(key_secret) >= 16:
+            return RazorpayLiveAdapter(
+                key_id=key_id,
+                key_secret=key_secret
+            )
+
     sandbox_mode = getattr(settings, 'PAYMENT_SANDBOX_MODE', True)
-    if sandbox_mode or not getattr(settings, 'RAZORPAY_KEY_ID', None) or 'sample' in settings.RAZORPAY_KEY_ID:
+    key_id = getattr(settings, 'RAZORPAY_KEY_ID', None)
+    if sandbox_mode or not key_id or 'sample' in key_id or 'demo' in key_id:
         return RazorpaySandboxAdapter()
     return RazorpayLiveAdapter()
